@@ -24,9 +24,13 @@ class Sarsa:
             return np.random.choice(self.q_table[state[0], state[1], :]).astype(np.int64)
 
 
-    def learning(self, state, action, reward, state_prime, done):
+    def learning(self, state, action, reward, state_prime, action_prime, done):
+        q_next = self.q_table[state_prime[0], state_prime[1], action_prime]
+        q_value = self.q_table[state[0], state[1], action]
         if done:
-            self.q_table[state[0], state[1], action] += self.lr * (reward - self.q_table[state[0], state[1], action])
+            update = self.lr * (reward - q_value)
         else:
-            action_prime = self.choose_action(state_prime)
-            self.q_table[state[0], state[1], action] += self.lr * (reward + (self.gamma*(self.q_table[state_prime[0], state_prime[1], action_prime])) - self.q_table[state[0], state[1], action])
+            update = self.lr * (reward + (self.gamma * q_next) - q_value)
+
+        if not update == 0:
+            self.q_table[state[0], state[1], action] += update

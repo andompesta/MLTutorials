@@ -25,7 +25,10 @@ class QLearning:
 
 
     def learning(self, state, action, reward, state_prime, done):
+        max_q_next = np.max(self.q_table[state_prime[0], state_prime[1], :])
+        q_value = self.q_table[state[0], state[1], action]
+
         if done:
-            self.q_table[state[0], state[1], action] += self.lr * (reward - self.q_table[state[0], state[1], action])
+            self.q_table[state[0], state[1], action] += self.lr * (reward - q_value)
         else:
-            self.q_table[state[0], state[1], action] += self.lr * (reward + (self.gamma*np.max(self.q_table[state_prime[0], state_prime[1], :])) - self.q_table[state[0], state[1], action])
+            self.q_table[state[0], state[1], action] += self.lr * (reward + (self.gamma*max_q_next) - q_value)
