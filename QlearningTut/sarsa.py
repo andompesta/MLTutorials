@@ -1,8 +1,8 @@
 import numpy as np
 
-TITLE = "Q-learning"
+TITLE = "SARSA"
 
-class QLearning:
+class Sarsa:
     def __init__(self, actions, env_size, learning_rate=0.1, epsilon=0.9, gamma=0.9):
         self.actions = actions
         self.env_size = env_size
@@ -28,4 +28,5 @@ class QLearning:
         if done:
             self.q_table[state[0], state[1], action] += self.lr * (reward - self.q_table[state[0], state[1], action])
         else:
-            self.q_table[state[0], state[1], action] += self.lr * (reward + (self.gamma*np.max(self.q_table[state_prime[0], state_prime[1], :])) - self.q_table[state[0], state[1], action])
+            action_prime = self.choose_action(state_prime)
+            self.q_table[state[0], state[1], action] += self.lr * (reward + (self.gamma*(self.q_table[state_prime[0], state_prime[1], action_prime])) - self.q_table[state[0], state[1], action])
