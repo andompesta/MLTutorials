@@ -9,11 +9,13 @@ The RL is in RL_brain.py.
 View more on my tutorial page: https://morvanzhou.github.io/tutorials/
 """
 
-from QlearningTut.maze_env import Maze
+from QlearningTut.maze_env_gif import Maze
 # from QlearningTut.q_learning import QLearning, TITLE
 from QlearningTut.sarsa import Sarsa, TITLE
 import pickle
 from os.path import join as join_path
+import numpy as np
+import imageio
 
 MAZE_H = 4
 MAZE_W = 8
@@ -24,9 +26,9 @@ def fix_state(state):
 
 
 def print_q_table(table):
-    for y in range(MAZE_H):
-        for x in range(MAZE_W):
-            print("{}-{}\t{}".format(x, y, " ".join(map(str, table[y, x, :]))) )
+    for x in range(MAZE_W):
+        for y in range(MAZE_H):
+            print("{}-{}\t{}".format(x, y, " ".join(map(str, table[x, y, :]))) )
 
 
 def dump(RL_algo, file_name, path="."):
@@ -38,15 +40,20 @@ def update():
     episode = 0
     while True:
         # initial observation
-        state = fix_state(env.reset())
+        state = env.reset()
         action = RL.choose_action(state)
-        while True:
-            # fresh env
-            env.render()
+        frames = [np.array(env.render(0))]
+
+        for step in range(100):
 
             state_, reward, done = env.step(action)
-            state_ = fix_state(state_)
             action_ = RL.choose_action(state_)
+
+            if action_ >= 4:
+                print_q_table(RL.q_table)
+                RL.choose_action(state_)
+                print(state_)
+                print(action_)
 
             if TITLE == "Q-learning":
                 RL.learning(state, action, reward, state_, done)
@@ -55,23 +62,25 @@ def update():
 
             state = state_
             action = action_
+            frames.append(np.array(env.render(step+1)))
 
 
             # break while loop when end of this episode
             if done:
-                episode += 1
                 print("\n\n---------{}\n\n".format(episode))
                 print_q_table(RL.q_table)
                 print("reward: {}".format(reward))
                 break
-        dump(RL, TITLE)
 
-    env.destroy()
-
+        if episode % 10 == 0:
+            time_per_step = 0.25
+            images = np.array(frames)
+            image_file = join_path(".", "image", '{}-{}.gif'.format(TITLE, episode))
+            imageio.mimsave(image_file, images, duration=time_per_step)
+            dump(RL, '{}'.format(TITLE))
+        episode += 1
 if __name__ == "__main__":
-    env = Maze(TITLE, height=MAZE_H, width=MAZE_W)
-
-    # RL = QLearning(actions=list(range(env.n_actions)), env_size=(MAZE_H, MAZE_W))
-    RL = Sarsa(actions=list(range(env.n_actions)), env_size=(MAZE_H, MAZE_W))
-    env.after(100, update)
-    env.mainloop()
+    env = Maze(height=MAZE_H, width=MAZE_W)
+    # RL = QLearning(actions=list(range(env.n_actions)), env_size=(MAZE_W, MAZE_H))
+    RL = Sarsa(actions=list(range(env.n_actions)), env_size=(MAZE_W, MAZE_H))
+    update()
