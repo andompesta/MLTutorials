@@ -13,7 +13,6 @@ def img_rgb2gray(img):
         crop_img = np.expand_dims(np.dot(img[..., :3], [0.299, 0.587, 0.114]), axis=-1).astype(np.uint8)
     else:
         crop_img = np.expand_dims(np.dot(img[:, ..., :3], [0.299, 0.587, 0.114]), axis=-1).astype(np.uint8)
-
     return crop_img
 
 
