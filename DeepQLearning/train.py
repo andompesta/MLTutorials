@@ -1,19 +1,12 @@
 import torch
-from datetime import datetime
-import torch.nn.functional as F
 import torch.optim as optim
-from torch.autograd import Variable
 import numpy as np
-
+from gym.wrappers import Monitor
 import DeepQLearning.helper as helper
 from DeepQLearning.model_dqn import epsilon_greedy_policy
 from os.path import join as path_join
 
-import gym
-from gym.wrappers import Monitor
 import itertools
-import os
-import random
 import sys
 import psutil
 if "../" not in sys.path:
@@ -57,25 +50,24 @@ def work(env, q_network, t_network, args, summary, summary_path, video_path, opt
     print("Populating replay memory...")
     state = env.reset()
     state = helper.state_processor(state)
-    state = np.stack([state] * 4, axis=2)
+    state = np.stack([state] * 4, axis=0)
     for i in range(args.replay_memory_init_size):
         action_probs = policy(state, epsilons[min(t_network.step, args.epsilon_decay_steps - 1)])
         action = np.random.choice(np.arange(len(action_probs)), p=action_probs)     # initially take random action
-        next_state, reward, done, _ = env.step(args.action[action])
+        next_state, reward, done, _ = env.step(args.actions[action])
         next_state = helper.state_processor(next_state)
-        next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
+        next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
         replay_memory.add(Transition(state, action, reward, next_state, done))
         if done:
             state = env.reset()
             state = helper.state_processor(state)
-            state = np.stack([state] * 4, axis=2)
+            state = np.stack([state] * 4, axis=0)
         else:
             state = next_state
 
-            # Record videos
-    env.monitor.start(helper.ensure_dir(video_path),
-                      resume=True,
-                      video_callable=lambda count: count % args.record_video_every == 0)
+    # Record videos
+    env = Monitor(env, directory=video_path, video_callable=lambda count: count % args.record_video_every == 0,
+                  resume=True)
 
     for i_episode in range(args.num_episodes):
         # Save the current checkpoint
@@ -87,7 +79,7 @@ def work(env, q_network, t_network, args, summary, summary_path, video_path, opt
         # Reset the environment
         state = env.reset()
         state = helper.state_processor(state)
-        state = np.stack([state] * 4, axis=2)
+        state = np.stack([state] * 4, axis=0)
         loss = None
 
         # One step in the environment
@@ -108,9 +100,9 @@ def work(env, q_network, t_network, args, summary, summary_path, video_path, opt
             # Take a step in the environment
             action_probs = policy(state, epsilons[min(t_network.step, args.epsilon_decay_steps - 1)])
             action = np.random.choice(np.arange(len(action_probs)), p=action_probs)  # initially take random action
-            next_state, reward, done, _ = env.step(args.action[action])
+            next_state, reward, done, _ = env.step(args.actions[action])
             next_state = helper.state_processor(next_state)
-            next_state = np.append(state[:, :, 1:], np.expand_dims(next_state, 2), axis=2)
+            next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
 
             # Save transition to replay memory
             replay_memory.add(Transition(state, action, reward, next_state, done))
@@ -121,15 +113,15 @@ def work(env, q_network, t_network, args, summary, summary_path, video_path, opt
 
 
             # Sample a minibatch from the replay memory
-            exp_batch = replay_memory.sample(args.batch_size)
+            state_batch, action_batch, reward_batch, next_state_batch, done_batch = replay_memory.sample(args.batch_size)
 
             # Calculate q values and targets
-            q_network.forward(exp_batch[0])
-            q_network.compute_action_pred(exp_batch[1])
+            q_network.forward(state_batch)
+            q_network.compute_action_pred(action_batch)
 
-            q_value_next = t_network.forward(exp_batch[3])
+            q_value_next = t_network.forward(next_state_batch)
             t_max_value, t_action = torch.max(q_value_next, dim=1)
-            t_values = exp_batch[2] + np.invert(exp_batch[4]).astype(np.float32) * args.didiscount_factor * t_max_value # remove reward of final state
+            t_values = reward_batch + np.invert(done_batch).astype(np.float32) * args.discount_factor * t_max_value.numpy() # remove reward of final state
 
 
             # Perform gradient descent update

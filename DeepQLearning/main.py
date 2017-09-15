@@ -1,11 +1,12 @@
 import argparse
 import gym
-from DeepQLearning.train import work
+from DeepQLearning import train
 from DeepQLearning.model_dqn import DQN_Network
+from DeepQLearning import helper
 from pycrayon import CrayonClient
 from datetime import datetime
 from os.path import join as path_join
-from DeepQLearning import helper
+
 from torch import optim
 EXP_NAME = "exp-{}".format(datetime.now())
 
@@ -33,7 +34,7 @@ def __pars_args__():
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=500000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=50000,
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=50,
                         help="Number of random experiences to sample when initializing the reply memory")
     return parser.parse_args()
 
@@ -41,7 +42,7 @@ if __name__ == '__main__':
     args = __pars_args__()
 
     cc = CrayonClient(hostname="localhost")
-    cc.remove_all_experiments()
+    # cc.remove_all_experiments()
 
     video_path = path_join(args.monitor_path, EXP_NAME)
     summary_path = path_join(args.model_path, EXP_NAME)
@@ -49,7 +50,6 @@ if __name__ == '__main__':
     summary.to_zip(summary_path)
 
     env = gym.envs.make("Breakout-v0")
-
     q_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 3],
                             out_channels=[32, 64, 64],
@@ -58,7 +58,7 @@ if __name__ == '__main__':
                             type_=2,
                             summary=summary)
 
-    t_network = DQN_Network(args.batch_size, args.actions, args.number_frames,
+    t_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 3],
                             out_channels=[32, 64, 64],
                             strides=[4, 2, 1],
@@ -66,5 +66,7 @@ if __name__ == '__main__':
                             type_=1,
                             summary=summary)
 
-    work(env, q_network, t_network, args, summary, summary_path, video_path,
-         optim.RMSprop(q_network.parameters(), lr=args.learning_rate))
+    for t, stats in train.work(env, q_network, t_network, args, summary, summary_path, video_path,
+                               optim.RMSprop(q_network.parameters(), lr=args.learning_rate)):
+        print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
+

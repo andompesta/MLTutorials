@@ -17,11 +17,11 @@ class ExperienceBuffer():
     def add(self, experience):
         if len(list(self.buffer)) + len(list(experience)) >= self.buffer_size:
             self.buffer[0:(len(list(experience)) + len(list(self.buffer))) - self.buffer_size] = []
-        self.buffer.extend(experience)
+        self.buffer.extend([experience])
 
     def sample(self, size):
         samples = (random.sample(self.buffer, size))
-        return np.concatenate(map(np.array, zip(*samples)), axis=1)
+        return tuple(map(np.array, zip(*samples)))
 
 
 class NetworkType(Enum):
@@ -37,9 +37,9 @@ def img_rgb2gray(img):
     image_shape = img.shape
 
     if len(image_shape) == 3:
-        crop_img = np.expand_dims(np.dot(img[..., :3], [0.299, 0.587, 0.114]), axis=-1).astype(np.uint8)
+        crop_img = np.dot(img[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
     else:
-        crop_img = np.expand_dims(np.dot(img[:, ..., :3], [0.299, 0.587, 0.114]), axis=-1).astype(np.uint8)
+        crop_img = np.dot(img[:, ..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
     return crop_img
 
 
@@ -53,10 +53,10 @@ def img_crop_to_bounding_box(img, offset_height, offset_width, target_height, ta
     :return:
     """
     image_shape = img.shape
-    if len(image_shape) == 3:
-        return img[offset_height:offset_height + target_height, offset_width:target_width, :]
+    if len(image_shape) == 2:
+        return img[offset_height:offset_height + target_height, offset_width:target_width]
     else:
-        return img[:, offset_height:offset_height + target_height, offset_width:target_width, :]
+        return img[:, offset_height:offset_height + target_height, offset_width:target_width]
 
 def img_resize(img, resize_factor, order=0):
     """
@@ -83,7 +83,7 @@ def state_processor(state):
 
     image = img_rgb2gray(state)      # convert to rgb
     image = img_crop_to_bounding_box(image, 34, 0, 160, 160)
-    image = img_resize(image, [0.525, 0.525, 1])                # check aspect ration, otherwise convolution dim would not work
+    image = img_resize(image, [0.525, 0.525])                # check aspect ration, otherwise convolution dim would not work
 
     return image
 
