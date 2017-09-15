@@ -4,22 +4,42 @@ import torch.nn.functional as F
 import torch.optim as optim
 import torch.autograd as autograd
 from torch.autograd import Variable
-
+import numpy as np
+from DeepQLearning.helper import NetworkType
 
 f_type = torch.FloatTensor
 u_type = torch.ByteTensor
 i_type = torch.IntTensor
 
 
+def epsilon_greedy_policy(network):
+    """
+    Create a epsilon greedy policy function based on the given network Q-function
+    :param network: network used to approximate the Q-function
+    :return: action
+    """
+    def policy_fn(observation, epsilon):
+        A = f_type(np.ones(network.actions_space, dtype=np.float32)) * epsilon / network.actions_space
+        q_values = network.forward(np.expand_dims(observation, axis=0))[0]
+        best_action = np.argmax(q_values)
+        A[best_action] += (1.0 - epsilon)
+        return A
+    return policy_fn
+
 class DQN_Network(nn.Module):
-    def __init__(self, batch_size, action_space, n_frames_input, kernels_size, out_channels, strides, fc_size):
+    def __init__(self, batch_size, action_space, n_frames_input, kernels_size, out_channels, strides, fc_size, type_, summary):
         """
         DQN netowrk
         """
         super(DQN_Network, self).__init__()
+
         self.batch_size = batch_size
         self.action_space = action_space
         self.n_frame_input = n_frames_input
+        self.type = NetworkType(type_)
+        if self.type._value_ == 1:
+            self.global_step = 0
+        self.summary = summary
 
         assert len(out_channels) == 3
         self.out_channels = out_channels
@@ -54,12 +74,52 @@ class DQN_Network(nn.Module):
                                            out_features=self.fc_size[1]),
                                  nn.ReLU())
         self.fc2 = nn.Linear(in_features=self.fc_size[1], out_features=self.action_space)
+        self.mse_loss = nn.MSELoss()
 
-
-    def forward(self, X, y, actions):
+    def forward(self, X):
+        X = X/255.0
         # Our input are 4 RGB frames of shape 160, 160 each
-        self.X_pl = Variable(u_type(X))  # [batch_size, 80, 80, n_frames_input]
-        # The TD target value
-        self.y_pl = Variable(u_type(y))  # [batch_size, 1]
+        self.X_pl = Variable(f_type(X))  # [batch_size, 80, 80, n_frames_input]
+
+        X_conv1 = self.conv1(X)
+        X_conv2 = self.conv2(X_conv1)
+        X_conv3 = self.conv2(X_conv2)
+
+        X_flatten = X_conv3.view(self.batch_size, -1)
+        X_fc1 = self.fc1(X_flatten)
+        self.prediction = self.fc2(X_fc1)
+        return self.prediction
+
+    def compute_action_pred(self, actions):
+        """
+        Return the q_value for the given actions
+        :param actions: a numpy array of action
+        :return: 
+        """
         # Integer id of which action was selected
-        self.actions_pl = Variable(i_type(actions))  # [batch_size, 1]
+        self.actions_pl = i_type(actions)  # [batch_size, 1]
+
+        mask_index = u_type(range(self.batch_size)) * self.prediction.shape[1] + self.actions_pl
+        self.action_predictions = self.prediction.view[-1][mask_index]
+        return self.action_predictions
+
+    def compute_loss(self, target):
+        """
+        compute the loss between the q-values taken w.r.t the optimal ones
+        :param target: target values obtained following an optimal policy
+        :return: 
+        """
+        # The TD target value
+        self.y_pl = Variable(f_type(target))  # [batch_size, 1]
+
+        self.loss = self.mse_loss(self.y_pl, self.action_predictions)
+
+        self.summary.add_scalar_value('{}_network/loss'.format(self.type._name_), float(self.loss))
+        self.summary.add_scalar_value('{}_network/max_q_value'.format(self.type._name_),
+                                      float(torch.mean(self.prediction, dim=-1)))
+        self.summary.add_histogram_value('{}_network/q_values'.format(self.type._name_), float(self.prediction))
+
+
+
+
+        return self.loss

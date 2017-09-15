@@ -1,5 +1,32 @@
 import numpy as np
 from scipy.ndimage import zoom
+from enum import Enum
+import os
+import random
+
+class ExperienceBuffer():
+    def __init__(self, buffer_size=50000):
+        '''
+        store a history of experiences that can be randomly drawn from when training the network. We can draw form the
+        previous past experiment to learn
+        :param buffer_size: size of the buffer
+        '''
+        self.buffer = []
+        self.buffer_size = buffer_size
+
+    def add(self, experience):
+        if len(list(self.buffer)) + len(list(experience)) >= self.buffer_size:
+            self.buffer[0:(len(list(experience)) + len(list(self.buffer))) - self.buffer_size] = []
+        self.buffer.extend(experience)
+
+    def sample(self, size):
+        samples = (random.sample(self.buffer, size))
+        return np.concatenate(map(np.array, zip(*samples)), axis=1)
+
+
+class NetworkType(Enum):
+    TARGET = 1
+    Q = 2
 
 def img_rgb2gray(img):
     """
@@ -44,16 +71,28 @@ def img_resize(img, resize_factor, order=0):
 def state_processor(state):
     """
     Processes a raw Atari iamges. Resizes it and converts it to grayscale.
+    No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
+    experience replay
     :param state: A [210, 160, 3] Atari RGB State
     :return: A processed [84, 84, 1] state representing grayscale values.
     """
-    img_size = state.shape()
+    img_size = state.shape
     assert img_size[0] == 210
     assert img_size[1] == 160
     assert img_size[2] == 3
 
     image = img_rgb2gray(state)      # convert to rgb
     image = img_crop_to_bounding_box(image, 34, 0, 160, 160)
-    image = img_resize(image, [0.5, 0.5, 1])
+    image = img_resize(image, [0.525, 0.525, 1])                # check aspect ration, otherwise convolution dim would not work
 
     return image
+
+def ensure_dir(file_path):
+    '''
+    Used to ensure to create the a directory when needed
+    :param file_path: path to the file that we want to create
+    '''
+    directory = os.path.dirname(file_path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+    return file_path

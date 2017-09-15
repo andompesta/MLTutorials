@@ -11,8 +11,17 @@ print(env.unwrapped.get_action_meanings())
 observation = env.reset()
 print("Observation space shape: {}".format(observation.shape))
 
-
 img_array = env.render(mode='rgb_array')
+plt.figure()
+plt.imshow(img_array)
+
+#test
+img_resize = helper.state_processor(img_array)
+plt.figure()
+plt.imshow(img_resize[:, :, 0], cmap="gray")
+
+
+#test batch
 img_grey = helper.img_rgb2gray(np.tile(img_array, [2, 1, 1, 1]))
 img_croped = helper.img_crop_to_bounding_box(img_grey, 34, 0, 160, 160)
 img_resize = helper.img_resize(img_croped, [1, 0.5, 0.5, 1])
