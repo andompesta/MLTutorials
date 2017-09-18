@@ -2,26 +2,7 @@ import numpy as np
 from scipy.ndimage import zoom
 from enum import Enum
 import os
-import random
 
-class ExperienceBuffer():
-    def __init__(self, buffer_size=50000):
-        '''
-        store a history of experiences that can be randomly drawn from when training the network. We can draw form the
-        previous past experiment to learn
-        :param buffer_size: size of the buffer
-        '''
-        self.buffer = []
-        self.buffer_size = buffer_size
-
-    def add(self, experience):
-        if len(list(self.buffer)) + len(list(experience)) >= self.buffer_size:
-            self.buffer[0:(len(list(experience)) + len(list(self.buffer))) - self.buffer_size] = []
-        self.buffer.extend([experience])
-
-    def sample(self, size):
-        samples = (random.sample(self.buffer, size))
-        return tuple(map(np.array, zip(*samples)))
 
 
 class NetworkType(Enum):

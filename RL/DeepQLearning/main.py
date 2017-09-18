@@ -1,14 +1,10 @@
 import argparse
 from datetime import datetime
-from os.path import join as path_join
-
 import gym
-from DeepQLearning import train
-from DeepQLearning.model_dqn import DQN_Network
-from pycrayon import CrayonClient
+from RL.DeepQLearning import train
+from RL.DeepQLearning.model_dqn import DQN_Network
 from torch import optim
-
-from RL.DeepQLearning import helper
+from visdom import Visdom
 
 EXP_NAME = "exp-{}".format(datetime.now())
 
@@ -18,7 +14,7 @@ def __pars_args__():
     parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
-    parser.add_argument('--train', default=True, help='if we want to update the master weights')
+    parser.add_argument('--cuda', default=True, help='Execute on cuda')
     parser.add_argument('-bs', '--batch_size', type=int, default=32, help='batch size used during learning')
 
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
@@ -36,20 +32,13 @@ def __pars_args__():
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=500000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=50,
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
                         help="Number of random experiences to sample when initializing the reply memory")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = __pars_args__()
-
-    cc = CrayonClient(hostname="localhost")
-    # cc.remove_all_experiments()
-
-    video_path = path_join(args.monitor_path, EXP_NAME)
-    summary_path = path_join(args.model_path, EXP_NAME)
-    summary = cc.create_experiment(helper.ensure_dir(summary_path))
-    summary.to_zip(summary_path)
+    vis = Visdom()
 
     env = gym.envs.make("Breakout-v0")
     q_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
@@ -58,17 +47,19 @@ if __name__ == '__main__':
                             strides=[4, 2, 1],
                             fc_size=[3136, 512],
                             type_=2,
-                            summary=summary)
+                            vis=vis)
 
     t_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 3],
                             out_channels=[32, 64, 64],
                             strides=[4, 2, 1],
                             fc_size=[3136, 512],
-                            type_=1,
-                            summary=summary)
+                            type_=1)
+    if args.cuda:
+        q_network.cuda()
+        t_network.cuda()
 
-    for t, stats in train.work(env, q_network, t_network, args, summary, summary_path, video_path,
+    for t, stats in train.work(env, q_network, t_network, args, vis, EXP_NAME,
                                optim.RMSprop(q_network.parameters(), lr=args.learning_rate)):
         print("\nEpisode Reward: {}".format(stats.episode_rewards[-1]))
 
