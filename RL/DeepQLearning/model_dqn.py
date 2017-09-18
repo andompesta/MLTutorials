@@ -1,11 +1,9 @@
+import numpy as np
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
-import torch.optim as optim
-import torch.autograd as autograd
 from torch.autograd import Variable
-import numpy as np
-from DeepQLearning.helper import NetworkType
+
+from RL.DeepQLearning.helper import NetworkType
 
 f_type = torch.FloatTensor
 u_type = torch.ByteTensor

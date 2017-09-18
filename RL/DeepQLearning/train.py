@@ -1,19 +1,20 @@
-import torch
-import torch.optim as optim
-import numpy as np
-from gym.wrappers import Monitor
-import DeepQLearning.helper as helper
-from DeepQLearning.model_dqn import epsilon_greedy_policy
-from os.path import join as path_join
-
 import itertools
 import sys
-import psutil
+from os.path import join as path_join
+
+import numpy as np
+import torch
+import torch.optim as optim
+from DeepQLearning.model_dqn import epsilon_greedy_policy
+from gym.wrappers import Monitor
+
+import RL.DeepQLearning.helper as helper
+
 if "../" not in sys.path:
   sys.path.append("../")
 
-import DeepQLearning.plotting as plotting
-from collections import deque, namedtuple
+import RL.DeepQLearning.plotting as plotting
+from collections import namedtuple
 
 def work(env, q_network, t_network, args, summary, summary_path, video_path, optimizer):
     """

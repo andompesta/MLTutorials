@@ -9,13 +9,15 @@ The RL is in RL_brain.py.
 View more on my tutorial page: https://morvanzhou.github.io/tutorials/
 """
 
-from QlearningTut.maze_env_gif import Maze
-# from QlearningTut.q_learning import QLearning, TITLE
-from QlearningTut.sarsa import Sarsa, TITLE
 import pickle
 from os.path import join as join_path
-import numpy as np
+
 import imageio
+import numpy as np
+from QlearningTut.maze_env_gif import Maze
+
+# from QlearningTut.q_learning import QLearning, TITLE
+from RL.QlearningTut.sarsa import Sarsa, TITLE
 
 MAZE_H = 4
 MAZE_W = 8

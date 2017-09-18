@@ -1,13 +1,15 @@
 import argparse
-import gym
-from DeepQLearning import train
-from DeepQLearning.model_dqn import DQN_Network
-from DeepQLearning import helper
-from pycrayon import CrayonClient
 from datetime import datetime
 from os.path import join as path_join
 
+import gym
+from DeepQLearning import train
+from DeepQLearning.model_dqn import DQN_Network
+from pycrayon import CrayonClient
 from torch import optim
+
+from RL.DeepQLearning import helper
+
 EXP_NAME = "exp-{}".format(datetime.now())
 
 def __pars_args__():

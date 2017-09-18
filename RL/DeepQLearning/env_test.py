@@ -1,7 +1,8 @@
 import gym
 import numpy as np
 from matplotlib import pyplot as plt
-import DeepQLearning.helper as helper
+
+import RL.DeepQLearning.helper as helper
 
 env = gym.make("Breakout-v0")
 
