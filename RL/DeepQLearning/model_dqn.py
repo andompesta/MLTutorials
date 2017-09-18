@@ -5,9 +5,9 @@ from torch.autograd import Variable
 from RL.DeepQLearning.helper import NetworkType
 import random
 
-f_type = torch.cuda.FloatTensor
-u_type = torch.cuda.ByteTensor
-i_type = torch.cuda.LongTensor
+f_type = torch.FloatTensor
+u_type = torch.ByteTensor
+i_type = torch.LongTensor
 
 
 class ExperienceBuffer():
@@ -46,8 +46,7 @@ def epsilon_greedy_policy(network):
     return policy_fn
 
 class DQN_Network(nn.Module):
-    def __init__(self, batch_size, action_space, n_frames_input, kernels_size, out_channels, strides, fc_size, type_,
-                 vis=None):
+    def __init__(self, batch_size, action_space, n_frames_input, kernels_size, out_channels, strides, fc_size, type_):
         """
         DQN netowrk
         """

@@ -12,7 +12,6 @@ import RL.DeepQLearning.helper as helper
 if "../" not in sys.path:
   sys.path.append("../")
 
-import RL.DeepQLearning.plotting as plotting
 from collections import namedtuple
 
 def work(env, q_network, t_network, args, vis, exp_name, optimizer):
@@ -30,6 +29,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     torch.manual_seed(args.seed)
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
+
     # local variable for plotting
     update_performance = None
     update_reward = None
@@ -46,9 +46,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
         optimizer = optim.Adam(q_network.parameters(), lr=args.learning_rate)
 
     # Keeps track of useful statistics
-    stats = plotting.EpisodeStats(
-        episode_lengths=np.zeros(args.num_episodes),
-        episode_rewards=np.zeros(args.num_episodes))
+    stats = helper.EpisodeStats(episode_lengths=0, episode_rewards=0)
     replay_memory = ExperienceBuffer()
 
     # The epsilon decay schedule
@@ -93,6 +91,10 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
         state = helper.state_processor(state)
         state = np.stack([state] * 4, axis=0)
 
+        # Update statistics
+        stats.episode_rewards = 0
+        stats.episode_lengths = 0
+
         # One step in the environment
         for t in itertools.count():
             # Epsilon for this time step
@@ -125,8 +127,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
             replay_memory.add(Transition(state, action, reward, next_state, float(done)))
 
             # Update statistics
-            stats.episode_rewards[i_episode] += reward
-            stats.episode_lengths[i_episode] = t
+            stats.episode_rewards += reward
+            stats.episode_lengths = t
 
 
             # Sample a minibatch from the replay memory
@@ -166,7 +168,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
             state = next_state
             t_network.step += 1
 
-        vis.line(Y=np.array([[stats.episode_rewards[i_episode], stats.episode_lengths[i_episode]]]),
+        vis.line(Y=np.array([[stats.episode_rewards, stats.episode_lengths]]),
                  X=np.array([[i_episode, i_episode]]),
                  opts=dict(legend=["episode_reward", "episode_length"],
                            title="rewards",
@@ -177,9 +179,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
         vis.save(["main"])
         i_episode += 1
 
-        yield t_network.step, plotting.EpisodeStats(
-            episode_lengths=stats.episode_lengths[:i_episode + 1],
-            episode_rewards=stats.episode_rewards[:i_episode + 1])
+        yield t_network.step, stats
 
     env.monitor.close()
     return stats

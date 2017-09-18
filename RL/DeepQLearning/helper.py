@@ -4,6 +4,11 @@ from enum import Enum
 import os
 
 
+class EpisodeStats(object):
+    def __init__(self, episode_lengths, episode_rewards):
+        self.episode_lengths = episode_lengths
+        self.episode_rewards = episode_rewards
+
 
 class NetworkType(Enum):
     TARGET = 1
