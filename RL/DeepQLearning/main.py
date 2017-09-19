@@ -30,13 +30,16 @@ def __pars_args__():
     parser.add_argument("-ed", "--epsilon_decay_steps", type=int, default=500000,
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
-    parser.add_argument("-rm", "--replay_memory_size", type=int, default=500000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=50,
+    parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
                         help="Number of random experiences to sample when initializing the reply memory")
     return parser.parse_args()
 
 if __name__ == '__main__':
     args = __pars_args__()
+    print("record_video_every:{}\treplay_memory_size:{}\treplay_memory_init_size:{}".format(args.record_video_every,
+                                                                                            args.replay_memory_size,
+                                                                                            args.replay_memory_init_size))
     vis = Visdom()
     env = gym.envs.make("Breakout-v0").unwrapped
 
@@ -58,6 +61,6 @@ if __name__ == '__main__':
         t_network.cuda()
 
     for t, stats in train.work(env, q_network, t_network, args, vis, EXP_NAME,
-                               optim.RMSprop(q_network.parameters(), lr=args.learning_rate)):
+                               optim.RMSprop(q_network.parameters(), lr=args.learning_rate, eps=0.01, alpha=0.95)):
         print("\nEpisode Reward: {}".format(stats.episode_rewards))
 

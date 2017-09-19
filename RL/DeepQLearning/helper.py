@@ -16,7 +16,7 @@ class EpisodeStats(object):
         self.episode_rewards = episode_rewards
 
 class ExperienceBuffer():
-    def __init__(self, buffer_size=50000):
+    def __init__(self, buffer_size=10000):
         '''
         store a history of experiences that can be randomly drawn from when training the network. We can draw form the
         previous past experiment to learn
@@ -32,8 +32,9 @@ class ExperienceBuffer():
 
     def sample(self, size):
         samples = (random.sample(self.buffer, size))
-        state_batch, action_batch, reward_batch, next_state_batch, done_batch = tuple(map(np.array, zip(*samples)))
-        return state_batch, action_batch, reward_batch, next_state_batch, done_batch
+        state_batch, action_batch, reward_batch, next_state_batch, done_batch = tuple(zip(*samples))
+        return torch.cat(state_batch).type(TENSOR_TYPE["f_tensor"]), torch.cat(action_batch).type(TENSOR_TYPE["i_tensor"]), torch.cat(TENSOR_TYPE["f_tensor"]([reward_batch])), \
+               torch.cat(next_state_batch).type(TENSOR_TYPE["f_tensor"]), torch.cat(TENSOR_TYPE["f_tensor"]([done_batch]))
 
 
 
@@ -99,7 +100,7 @@ def state_processor(state, offset_height=34, offset_width=0, target_height=160, 
     image = img_rgb2gray(state)      # convert to rgb
     image = img_crop_to_bounding_box(image, 34, 0, 160, 160)
     image = img_resize(image, [0.525, 0.525])                # check aspect ration, otherwise convolution dim would not work
-    return torch.from_numpy(image/255.).type(TENSOR_TYPE["f_tensor"])
+    return torch.from_numpy(image/255.).type(torch.FloatTensor).unsqueeze(dim=0)
 
 def ensure_dir(file_path):
     '''
