@@ -1,7 +1,6 @@
 import gym
 import numpy as np
 from matplotlib import pyplot as plt
-
 import RL.DeepQLearning.helper as helper
 
 env = gym.make("Breakout-v0")
@@ -19,7 +18,7 @@ plt.imshow(img_array)
 #test
 img_resize = helper.state_processor(img_array)
 plt.figure()
-plt.imshow(img_resize[:, :, 0], cmap="gray")
+plt.imshow(img_resize[:, :], cmap="gray")
 
 
 #test batch

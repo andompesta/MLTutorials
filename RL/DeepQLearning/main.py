@@ -14,7 +14,7 @@ def __pars_args__():
     parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
-    parser.add_argument('--cuda', default=False, help='Execute on cuda')
+    parser.add_argument('--cuda', default=True, help='Execute on cuda')
     parser.add_argument('-bs', '--batch_size', type=int, default=32, help='batch size used during learning')
 
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
@@ -39,8 +39,8 @@ def __pars_args__():
 if __name__ == '__main__':
     args = __pars_args__()
     vis = Visdom()
+    env = gym.envs.make("Breakout-v0").unwrapped
 
-    env = gym.envs.make("Breakout-v0")
     q_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 3],
                             out_channels=[32, 64, 64],

@@ -3,32 +3,8 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from RL.DeepQLearning.helper import NetworkType
-import random
+from RL.DeepQLearning.helper import TENSOR_TYPE
 
-f_type = torch.FloatTensor
-u_type = torch.ByteTensor
-i_type = torch.LongTensor
-
-
-class ExperienceBuffer():
-    def __init__(self, buffer_size=50000):
-        '''
-        store a history of experiences that can be randomly drawn from when training the network. We can draw form the
-        previous past experiment to learn
-        :param buffer_size: size of the buffer
-        '''
-        self.buffer = []
-        self.buffer_size = buffer_size
-
-    def add(self, experience):
-        if len(list(self.buffer)) + len(list(experience)) >= self.buffer_size:
-            self.buffer[0:(len(list(experience)) + len(list(self.buffer))) - self.buffer_size] = []
-        self.buffer.extend([experience])
-
-    def sample(self, size):
-        samples = (random.sample(self.buffer, size))
-        state_batch, action_batch, reward_batch, next_state_batch, done_batch = tuple(map(np.array, zip(*samples)))
-        return state_batch, action_batch, f_type(reward_batch), next_state_batch, f_type(done_batch)
 
 
 def epsilon_greedy_policy(network):
@@ -38,11 +14,11 @@ def epsilon_greedy_policy(network):
     :return: action
     """
     def policy_fn(observation, epsilon):
-        A = f_type(np.ones(network.action_space)) * epsilon / network.action_space
-        q_values = network.forward(np.expand_dims(observation, axis=0))[0]
+        A = TENSOR_TYPE["f_tensor"](np.ones(network.action_space)) * epsilon / network.action_space
+        q_values = network.forward(Variable(observation.unsqueeze(dim=0), volatile=True))[0]
         best_action = torch.max(q_values, dim=0)[1]
         A[best_action] += (1.0 - epsilon)
-        return A.cpu().numpy()
+        return A
     return policy_fn
 
 class DQN_Network(nn.Module):
@@ -95,18 +71,17 @@ class DQN_Network(nn.Module):
                                            out_features=self.action_space),
                                  nn.ReLU())
 
-        self.mse_loss = nn.MSELoss()
+        self._loss = nn.SmoothL1Loss()
 
     def forward(self, X):
-        X = X/255.0
         # Our input are 4 RGB frames of shape 160, 160 each
-        self.X_pl = Variable(f_type(X))  # [batch_size, 80, 80, n_frames_input]
+        self.X_pl = X  # [batch_size, 80, 80, n_frames_input]
 
         X_conv1 = self.conv1(self.X_pl)
         X_conv2 = self.conv2(X_conv1)
         X_conv3 = self.conv3(X_conv2)
 
-        X_flatten = X_conv3.view(X.shape[0], -1)
+        X_flatten = X_conv3.view(self.X_pl.size(0), -1)
         X_fc1 = self.fc1(X_flatten)
         self.prediction = self.fc2(X_fc1)
         return self.prediction.data
@@ -132,5 +107,5 @@ class DQN_Network(nn.Module):
         """
         # The TD target value
         self.y_pl = Variable(f_type(target))  # [batch_size, 1]
-        self.loss = self.mse_loss(self.action_predictions, self.y_pl)
+        self.loss = self._loss(self.action_predictions, self.y_pl)
         return self.loss

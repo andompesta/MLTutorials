@@ -6,13 +6,14 @@ import torch
 import torch.optim as optim
 from RL.DeepQLearning.model_dqn import epsilon_greedy_policy
 from gym.wrappers import Monitor
-from RL.DeepQLearning.model_dqn import ExperienceBuffer
 import RL.DeepQLearning.helper as helper
 
 if "../" not in sys.path:
   sys.path.append("../")
 
 from collections import namedtuple
+GLOBAL_STEP = 0
+
 
 def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     """
@@ -26,6 +27,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     :param optimizer: optimizer used 
     :return: 
     """
+    global GLOBAL_STEP
     torch.manual_seed(args.seed)
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
@@ -47,7 +49,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
 
     # Keeps track of useful statistics
     stats = helper.EpisodeStats(episode_lengths=0, episode_rewards=0)
-    replay_memory = ExperienceBuffer()
+    replay_memory = helper.ExperienceBuffer()
 
     # The epsilon decay schedule
     epsilons = np.linspace(args.epsilon_start, args.epsilon_end, args.epsilon_decay_steps)
@@ -59,11 +61,12 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     print("Populating replay memory...")
     state = env.reset()
     state = helper.state_processor(state)
-    state = np.stack([state] * 4, axis=0)
+    state = torch.stack([state] * 4, dim=0)
     for i in range(args.replay_memory_init_size):
-        action_probs = policy(state, epsilons[min(t_network.step, args.epsilon_decay_steps - 1)])
-        action = np.random.choice(np.arange(len(action_probs)), p=action_probs)     # initially take random action
-        next_state, reward, done, _ = env.step(args.actions[action])
+        action_probs = policy(state, epsilons[min(GLOBAL_STEP, args.epsilon_decay_steps - 1)])
+        action = torch.multinomial(action_probs, num_samples=1, replacement=True)
+        # action = np.random.choice(np.arange(len(action_probs)), p=action_probs)     # initially take random action
+        next_state, reward, done, _ = env.step(action[0])
         next_state = helper.state_processor(next_state)
         next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
         replay_memory.add(Transition(state, action, reward, next_state, float(done)))

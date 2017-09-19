@@ -2,12 +2,40 @@ import numpy as np
 from scipy.ndimage import zoom
 from enum import Enum
 import os
+import torch
+import random
 
+use_cuda = torch.cuda.is_available()
+TENSOR_TYPE = dict(f_tensor=torch.cuda.FloatTensor if use_cuda else torch.FloatTensor,
+                   i_tensor=torch.cuda.LongTensor if use_cuda else torch.LongTensor,
+                   u_tensor=torch.cuda.ByteTensor if use_cuda else torch.ByteTensor)
 
 class EpisodeStats(object):
     def __init__(self, episode_lengths, episode_rewards):
         self.episode_lengths = episode_lengths
         self.episode_rewards = episode_rewards
+
+class ExperienceBuffer():
+    def __init__(self, buffer_size=50000):
+        '''
+        store a history of experiences that can be randomly drawn from when training the network. We can draw form the
+        previous past experiment to learn
+        :param buffer_size: size of the buffer
+        '''
+        self.buffer = []
+        self.buffer_size = buffer_size
+
+    def add(self, experience):
+        if len(list(self.buffer)) + len(list(experience)) >= self.buffer_size:
+            self.buffer[0:(len(list(experience)) + len(list(self.buffer))) - self.buffer_size] = []
+        self.buffer.extend([experience])
+
+    def sample(self, size):
+        samples = (random.sample(self.buffer, size))
+        state_batch, action_batch, reward_batch, next_state_batch, done_batch = tuple(map(np.array, zip(*samples)))
+        return state_batch, action_batch, reward_batch, next_state_batch, done_batch
+
+
 
 
 class NetworkType(Enum):
@@ -54,7 +82,7 @@ def img_resize(img, resize_factor, order=0):
     return zoom(img, zoom=resize_factor, order=order)
 
 
-def state_processor(state):
+def state_processor(state, offset_height=34, offset_width=0, target_height=160, target_width=160):
     """
     Processes a raw Atari iamges. Resizes it and converts it to grayscale.
     No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
@@ -67,11 +95,11 @@ def state_processor(state):
     assert img_size[1] == 160
     assert img_size[2] == 3
 
+
     image = img_rgb2gray(state)      # convert to rgb
     image = img_crop_to_bounding_box(image, 34, 0, 160, 160)
     image = img_resize(image, [0.525, 0.525])                # check aspect ration, otherwise convolution dim would not work
-
-    return image
+    return torch.from_numpy(image/255.).type(TENSOR_TYPE["f_tensor"])
 
 def ensure_dir(file_path):
     '''
