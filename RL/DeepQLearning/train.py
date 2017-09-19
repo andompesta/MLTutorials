@@ -68,7 +68,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
         # action = np.random.choice(np.arange(len(action_probs)), p=action_probs)     # initially take random action
         next_state, reward, done, _ = env.step(action[0])
         next_state = helper.state_processor(next_state)
-        next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
+        # next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
+        next_state = torch.cat(state[1:, :, :], next_state.unsqueeze(dim=0), dim=0)
         replay_memory.add(Transition(state, action, reward, next_state, float(done)))
         if done:
             state = env.reset()
@@ -121,8 +122,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
 
             # Take a step in the environment
             action_probs = policy(state, epsilons[min(t_network.step, args.epsilon_decay_steps - 1)])
-            action = np.random.choice(np.arange(len(action_probs)), p=action_probs)  # initially take random action
-            next_state, reward, done, _ = env.step(args.actions[action])
+            # action = np.random.choice(np.arange(len(action_probs)), p=action_probs)  # initially take random action
+            # next_state, reward, done, _ = env.step(args.actions[action])
+            action = torch.multinomial(action_probs, num_samples=1, replacement=True)
+            next_state, reward, done, _ = env.step(action[0])
+
             next_state = helper.state_processor(next_state)
             next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
 

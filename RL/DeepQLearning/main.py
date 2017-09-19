@@ -5,7 +5,7 @@ from RL.DeepQLearning import train
 from RL.DeepQLearning.model_dqn import DQN_Network
 from torch import optim
 from visdom import Visdom
-
+from RL.DeepQLearning.helper import use_cuda
 EXP_NAME = "exp-{}".format(datetime.now())
 
 def __pars_args__():
@@ -14,7 +14,6 @@ def __pars_args__():
     parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
-    parser.add_argument('--cuda', default=True, help='Execute on cuda')
     parser.add_argument('-bs', '--batch_size', type=int, default=32, help='batch size used during learning')
 
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
@@ -54,7 +53,7 @@ if __name__ == '__main__':
                             strides=[4, 2, 1],
                             fc_size=[3136, 512],
                             type_=1)
-    if args.cuda:
+    if use_cuda:
         q_network.cuda()
         t_network.cuda()
 
