@@ -7,6 +7,7 @@ from torch.autograd import Variable
 from RL.DeepQLearning.model_dqn import epsilon_greedy_policy
 from gym.wrappers import Monitor
 import RL.DeepQLearning.helper as helper
+import psutil
 
 if "../" not in sys.path:
   sys.path.append("../")
@@ -31,6 +32,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     torch.manual_seed(args.seed)
     Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
+    current_process = psutil.Process()
 
     # local variable for plotting
     update_performance = None
@@ -55,7 +57,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     epsilons = np.linspace(args.epsilon_start, args.epsilon_end, args.epsilon_decay_steps)
 
     # The policy we're following
-    policy = epsilon_greedy_policy(q_network)
+    policy = epsilon_greedy_policy(q_network, args.epsilon_end, args.epsilon_start, args.epsilon_decay_steps)
 
     # Populate the replay memory with initial experience
     print("Populating replay memory...")
@@ -77,13 +79,6 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
                  win="plane_perfromance_{}".format(exp_name),
                  update=update_performance)
         update_performance = "append"
-
-        # action_probs = policy(state, epsilons[min(GLOBAL_STEP, args.epsilon_decay_steps - 1)])
-        # action = torch.multinomial(action_probs, num_samples=1, replacement=True)
-        # action = np.random.choice(np.arange(len(action_probs)), p=action_probs)     # initially take random action
-        # next_state, reward, done, _ = env.step(action[0])
-        # next_state = helper.state_processor(next_state)
-        # next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
 
         replay_memory.add(Transition(state, action, reward, next_state, float(done)))
         if done:
@@ -116,39 +111,21 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
 
         # One step in the environment
         for t in itertools.count():
-            action, epsilon = policy(state, GLOBAL_STEP)
-            next_state, reward, done, _ = env.step(action[0])
-            next_state = helper.state_processor(next_state)
-            next_state = torch.cat((state[:, 1:, :, :], next_state.unsqueeze(dim=0)), dim=1)
 
-            # # Epsilon for this time step
-            # epsilon = epsilons[min(GLOBAL_STEP, args.epsilon_decay_steps - 1)]
-
-            # Add epsilon to Visdom
-            vis.line(Y=np.array([epsilon]),
-                     X=np.array([GLOBAL_STEP]),
-                     opts=dict(legend=["epsilon"],
-                               title="epsilon",
-                               showlegend=True),
-                     win="plane_perfromance_{}".format(exp_name),
-                     update=update_performance)
-            update_performance = "append"
-
-
-
+            # Update params
             if GLOBAL_STEP % args.update_target_estimator_every == 0:
                 t_network.load_state_dict(q_network.state_dict())
                 print("\nCopied model parameters to target network.")
 
-            # Take a step in the environment
-            # action_probs = policy(state, epsilons[min(GLOBAL_STEP, args.epsilon_decay_steps - 1)])
-            # # action = np.random.choice(np.arange(len(action_probs)), p=action_probs)  # initially take random action
-            # # next_state, reward, done, _ = env.step(args.actions[action])
-            # action = torch.multinomial(action_probs, num_samples=1, replacement=True)
-            # next_state, reward, done, _ = env.step(action[0])
-            #
-            # next_state = helper.state_processor(next_state)
-            # next_state = np.append(state[1:, :, :], np.expand_dims(next_state, 0), axis=0)
+            # Print out which step we're on, useful for debugging.
+            print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
+            sys.stdout.flush()
+
+
+            action, epsilon = policy(state, GLOBAL_STEP)
+            next_state, reward, done, _ = env.step(action[0])
+            next_state = helper.state_processor(next_state)
+            next_state = torch.cat((state[:, 1:, :, :], next_state.unsqueeze(dim=0)), dim=1)
 
             # Save transition to replay memory
             replay_memory.add(Transition(state, action, reward, next_state, float(done)))
@@ -174,6 +151,14 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
             loss.backward()
             torch.nn.utils.clip_grad_norm(q_network.parameters(), args.max_grad_norm)
             optimizer.step()
+
+            if done:
+                # game ended
+                break
+            state = next_state
+            GLOBAL_STEP += 1
+
+
             vis.line(Y=np.array([[loss.data[0], q_value.max().data[0]]]),
                      X=np.array([[GLOBAL_STEP, GLOBAL_STEP]]),
                      opts=dict(legend=["loss", "max_q_value"],
@@ -183,14 +168,14 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
                      update=update_loss)
             update_loss = "append"
 
-            # Print out which step we're on, useful for debugging.
-            print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1, loss.data[0]), end="")
-            sys.stdout.flush()
-            if done:
-                # game ended
-                break
-            state = next_state
-            GLOBAL_STEP += 1
+            # Add epsilon to Visdom
+            vis.line(Y=np.array([epsilon]),
+                     X=np.array([GLOBAL_STEP]),
+                     opts=dict(legend=["epsilon"],
+                               title="epsilon",
+                               showlegend=True),
+                     win="plane_perfromance_{}".format(exp_name),
+                     update=update_performance)
 
         vis.line(Y=np.array([[stats.episode_rewards, stats.episode_lengths]]),
                  X=np.array([[i_episode, i_episode]]),
@@ -199,11 +184,20 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
                            showlegend=True),
                  win="plane_reward_{}".format(exp_name),
                  update=update_reward)
+
+        vis.line(Y=np.array([[current_process.cpu_percent(), current_process.memory_percent(memtype="vms")]]),
+                 X=np.array([[i_episode, i_episode]]),
+                 opts=dict(legend=["cpu_usage_percent", "v_memeory_usage_percent"],
+                           title="system status",
+                           showlegend=True),
+                 win="plane_system_{}".format(exp_name),
+                 update=update_reward)
+
+
         update_reward = "append"
-        vis.save(["main"])
+        # vis.save(["main"])
         i_episode += 1
 
         yield GLOBAL_STEP, stats
 
-    env.monitor.close()
     return stats
