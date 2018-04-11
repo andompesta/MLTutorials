@@ -23,9 +23,9 @@ def __pars_args__():
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
 
-    parser.add_argument("-u_target", "--update_target_estimator_every", default=10000,
+    parser.add_argument("-u_target", "--update_target_estimator_every", default=2000,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=10000, help="Number of episodes to run for")
+    parser.add_argument("-ne", "--num_episodes", type=int, default=100000, help="Number of episodes to run for")
     parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
     parser.add_argument('-nf', '--number_frames', type=int, default=4, help='number of frame for each state')
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
