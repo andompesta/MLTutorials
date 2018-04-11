@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.ndimage import zoom
+from skimage import transform
 from enum import Enum
 import os
 import torch
@@ -32,16 +32,55 @@ class ExperienceBuffer():
 
     def sample(self, size):
         samples = (random.sample(self.buffer, size))
-        state_batch, action_batch, reward_batch, next_state_batch, done_batch = tuple(zip(*samples))
-        return torch.cat(state_batch).type(TENSOR_TYPE["f_tensor"]), torch.cat(action_batch).type(TENSOR_TYPE["i_tensor"]), torch.cat(TENSOR_TYPE["f_tensor"]([reward_batch])), \
-               torch.cat(next_state_batch).type(TENSOR_TYPE["f_tensor"]), torch.cat(TENSOR_TYPE["f_tensor"]([done_batch]))
+        state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*samples)
+
+        state_batch = torch.stack(state_batch)
+        action_batch = torch.FloatTensor(list(action_batch))
+        reward_batch = torch.FloatTensor(reward_batch)
+        try:
+            next_state_batch = torch.stack(next_state_batch).type(torch.FloatTensor)
+        except Exception as e:
+            print(next_state_batch)
+            raise e
+        done_batch = torch.FloatTensor(done_batch)
+
+        return state_batch, action_batch, reward_batch, next_state_batch, done_batch
 
 
 
 
-class NetworkType(Enum):
-    TARGET = 1
-    Q = 2
+def stack_frame_setup(state_size, offset_height=30, offset_width=30, target_height=80, target_width=130):
+    def stack_frame(stacked_frames, state):
+        """
+        stack frame by frame on a queue of fixed length
+        :param stacked_frames: 
+        :param state: 
+        :return: 
+        """
+        frame = state_processor(state, offset_height, offset_width, target_height, target_width, state_size)
+        # Append frame to deque, automatically removes the oldest frame
+        stacked_frames.append(frame)
+
+        # Build the stacked state (first dimension specifies different frames)
+        stacked_state = torch.stack(stacked_frames, dim=0)
+        return stacked_state
+    return stack_frame
+
+def state_processor(state, offset_height, offset_width, target_height, target_width, state_size):
+    """
+    Processes a raw Atari iamges. Resizes it and converts it to grayscale.
+    No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
+    experience replay
+    :param state: A [210, 160, 3] Atari RGB State
+    :return: A processed [84, 84, 1] state representing grayscale values.
+    """
+    img_size = state.shape
+
+    # image = img_rgb2gray(state)      # convert to grayscale
+    image = img_crop_to_bounding_box(state, offset_height, offset_width, target_height, target_width)
+    image = image/255.
+    image = img_resize(image, state_size)                # check aspect ration, otherwise convolution dim would not work
+    return torch.from_numpy(image).type(torch.FloatTensor)
 
 def img_rgb2gray(img):
     """
@@ -73,34 +112,14 @@ def img_crop_to_bounding_box(img, offset_height, offset_width, target_height, ta
     else:
         return img[:, offset_height:offset_height + target_height, offset_width:target_width]
 
-def img_resize(img, resize_factor, order=0):
+def img_resize(img, size):
     """
     resize a given image
     :param img: 4-D Tensor of shape `[batch, height, width, channels]` or 3-D Tensor of shape `[height, width, channels]`.
     :param resize_factor: float or array for each axis
     :return:
     """
-    return zoom(img, zoom=resize_factor, order=order)
-
-
-def state_processor(state, offset_height=34, offset_width=0, target_height=160, target_width=160):
-    """
-    Processes a raw Atari iamges. Resizes it and converts it to grayscale.
-    No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
-    experience replay
-    :param state: A [210, 160, 3] Atari RGB State
-    :return: A processed [84, 84, 1] state representing grayscale values.
-    """
-    img_size = state.shape
-    assert img_size[0] == 210
-    assert img_size[1] == 160
-    assert img_size[2] == 3
-
-
-    image = img_rgb2gray(state)      # convert to rgb
-    image = img_crop_to_bounding_box(image, 34, 0, 160, 160)
-    image = img_resize(image, [0.525, 0.525])                # check aspect ration, otherwise convolution dim would not work
-    return torch.from_numpy(image/255.).type(torch.FloatTensor).unsqueeze(dim=0)
+    return transform.resize(img, size)
 
 def ensure_dir(file_path):
     '''
