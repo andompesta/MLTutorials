@@ -6,9 +6,9 @@ import time
 
 from RL.DeepQLearning import train
 from RL.DeepQLearning.model_dqn import DQN_Network
-from torch import optim
+from torch import optim, zeros
 from visdom import Visdom
-from RL.DeepQLearning.helper import use_cuda
+from RL.DeepQLearning.helper import use_cuda, state_processor
 from os import path
 EXP_NAME = "exp-{}".format(datetime.now())
 
@@ -31,14 +31,14 @@ def __pars_args__():
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
     parser.add_argument("-es", "--epsilon_start", type=float, default=1., help="starting epsilon")
     parser.add_argument("-ee", "--epsilon_end", type=float, default=0.01, help="ending epsilon")
-    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.001,
+    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.0005,
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
-    parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
+    parser.add_argument("-rm", "--replay_memory_size", type=int, default=20000, help="Size of the replay memory")
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=2500,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
-    parser.add_argument("--state_size", type=list, default=[84, 84], help="Max step for an episode")
+    parser.add_argument("--state_size", type=list, default=[120, 120], help="Frame size")
 
     return parser.parse_args()
 
@@ -49,7 +49,7 @@ def create_enviroment():
     game.init()
     return game
 
-def test_environment(actions):
+def test_environment(args):
     game = vz.DoomGame()
     game.load_config(path.join("doom_setup", "doom_config.cfg"))
     game.set_doom_scenario_path(path.join("doom_setup", "basic.wad"))
@@ -60,9 +60,11 @@ def test_environment(actions):
         game.new_episode()
         while not game.is_episode_finished():
             state = game.get_state()
-            img = state.screen_buffer
+            frame = state.screen_buffer
             misc = state.game_variables
-            action = random.choice(actions)
+            frame = state_processor(frame, 30, 10, 30, 30, args.state_size)
+
+            action = random.choice(args.actions)
             print(action)
             reward = game.make_action(action)
             print("\treward:", reward)
@@ -86,13 +88,13 @@ if __name__ == '__main__':
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
-                            fc_size=[1152, 512])
+                            fc_size=[3200, 512])
 
     t_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
-                            fc_size=[1152, 512])
+                            fc_size=[3200, 512])
     t_network.eval()
 
     if use_cuda:
@@ -100,6 +102,6 @@ if __name__ == '__main__':
         t_network.cuda()
 
     for t, stats in train.work(env, q_network, t_network, args, vis, EXP_NAME,
-                               optim.Adagrad(q_network.parameters(), lr=args.learning_rate)):
-        print("\nEpisode Reward: {}".format(stats.episode_rewards))
+                               optim.RMSprop(q_network.parameters(), lr=args.learning_rate)):
+        print("\nEpisode Reward: {}".format(stats.episode_reward))
 

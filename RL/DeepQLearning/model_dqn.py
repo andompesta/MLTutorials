@@ -2,10 +2,9 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.autograd import Variable
-from RL.DeepQLearning.helper import TENSOR_TYPE
 import random
 import math
-
+from RL.DeepQLearning.helper import use_cuda
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
@@ -21,7 +20,10 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions):
         sample = random.random()
         eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * steps_done * eps_decay)
         if sample > eps_threshold:
-            q_values = network.forward(Variable(observation.unsqueeze(0).cuda(), volatile=True))[0]
+            input = Variable(observation.unsqueeze(0), volatile=True)
+            if use_cuda:
+                input = input.cuda()
+            q_values = network.forward(input)[0]
             best_action = torch.max(q_values.data, dim=0)[1]
             return actions[best_action.cpu()[0]], eps_threshold
         else:

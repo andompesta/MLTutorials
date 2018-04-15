@@ -1,19 +1,23 @@
 import numpy as np
 from skimage import transform
-from enum import Enum
 import os
 import torch
 import random
+from collections import namedtuple
+import matplotlib.pyplot as plt
 
 use_cuda = torch.cuda.is_available()
-TENSOR_TYPE = dict(f_tensor=torch.cuda.FloatTensor if use_cuda else torch.FloatTensor,
-                   i_tensor=torch.cuda.LongTensor if use_cuda else torch.LongTensor,
-                   u_tensor=torch.cuda.ByteTensor if use_cuda else torch.ByteTensor)
 
-class EpisodeStats(object):
+Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+
+class EpisodeStat(object):
+    history = []
     def __init__(self, episode_lengths, episode_rewards):
-        self.episode_lengths = episode_lengths
-        self.episode_rewards = episode_rewards
+        self.episode_length = episode_lengths
+        self.episode_reward = episode_rewards
+        self.history.append(episode_rewards)
+        self.avg_reward = np.mean(self.history)
+
 
 class ExperienceBuffer():
     def __init__(self, buffer_size=10000):
@@ -49,7 +53,7 @@ class ExperienceBuffer():
 
 
 
-def stack_frame_setup(state_size, offset_height=30, offset_width=30, target_height=80, target_width=130):
+def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10, left_offset_width=30, right_offset_width=30):
     def stack_frame(stacked_frames, state):
         """
         stack frame by frame on a queue of fixed length
@@ -57,7 +61,7 @@ def stack_frame_setup(state_size, offset_height=30, offset_width=30, target_heig
         :param state: 
         :return: 
         """
-        frame = state_processor(state, offset_height, offset_width, target_height, target_width, state_size)
+        frame = state_processor(state, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width, state_size)
         # Append frame to deque, automatically removes the oldest frame
         stacked_frames.append(frame)
 
@@ -66,7 +70,7 @@ def stack_frame_setup(state_size, offset_height=30, offset_width=30, target_heig
         return stacked_state
     return stack_frame
 
-def state_processor(state, offset_height, offset_width, target_height, target_width, state_size):
+def state_processor(state, top_offset_height, bottom__offset_height, left_offset_width, right_offset_width, state_size):
     """
     Processes a raw Atari iamges. Resizes it and converts it to grayscale.
     No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
@@ -74,12 +78,15 @@ def state_processor(state, offset_height, offset_width, target_height, target_wi
     :param state: A [210, 160, 3] Atari RGB State
     :return: A processed [84, 84, 1] state representing grayscale values.
     """
-    img_size = state.shape
 
     # image = img_rgb2gray(state)      # convert to grayscale
-    image = img_crop_to_bounding_box(state, offset_height, offset_width, target_height, target_width)
-    image = image/255.
+    # image = img_crop_to_bounding_box(state, top_offset_height, bottom__offset_height, left_offset_width, right_offset_width)
+    # plt.imshow(state, cmap='gray')
+    # plt.show()
+    image = state/255.
     image = img_resize(image, state_size)                # check aspect ration, otherwise convolution dim would not work
+    # plt.imshow(image, cmap='gray')
+    # plt.show()
     return torch.from_numpy(image).type(torch.FloatTensor)
 
 def img_rgb2gray(img):
@@ -97,7 +104,7 @@ def img_rgb2gray(img):
     return crop_img
 
 
-def img_crop_to_bounding_box(img, offset_height, offset_width, target_height, target_width):
+def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width):
     """
     :param img:4-D Tensor of shape `[batch, height, width, channels]` or 3-D Tensor of shape `[height, width, channels]`.
     :param offset_height: Vertical coordinate of the top-left corner of the result in the input.
@@ -108,9 +115,10 @@ def img_crop_to_bounding_box(img, offset_height, offset_width, target_height, ta
     """
     image_shape = img.shape
     if len(image_shape) == 2:
-        return img[offset_height:offset_height + target_height, offset_width:target_width]
+        img = img[top_offset_height:-bottom_offset_height, left_offset_width:-right_offset_width]
+        return img
     else:
-        return img[:, offset_height:offset_height + target_height, offset_width:target_width]
+        return img[:, top_offset_height:-bottom_offset_height, left_offset_width:-right_offset_width]
 
 def img_resize(img, size):
     """
@@ -119,7 +127,7 @@ def img_resize(img, size):
     :param resize_factor: float or array for each axis
     :return:
     """
-    return transform.resize(img, size)
+    return transform.resize(img, size, mode='constant')
 
 def ensure_dir(file_path):
     '''
