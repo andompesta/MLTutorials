@@ -9,25 +9,21 @@ dependencies:
   - cycler=0.10.0=py36_0
   - freetype=2.5.5=2
   - icu=54.1=0
-  - intel-openmp=2018.0.0=h8158457_8
   - jbig=2.1=0
   - jpeg=9b=0
-  - libcxx=4.0.1=h579ed51_0
-  - libcxxabi=4.0.1=hebd6815_0
-  - libgfortran=3.0.1=h93005f0_2
   - libpng=1.6.27=0
-  - libprotobuf=3.4.1=h326466f_0
+  - libprotobuf=3.4.1
   - libtiff=4.0.6=3
   - matplotlib=2.0.2=np112py36_0
-  - mkl=2018.0.1=hfbd8650_4
+  - mkl=2018.0.1
   - nltk=3.2.4=py36_0
-  - numpy=1.12.1=py36h8871d66_1
+  - numpy
   - olefile=0.44=py36_0
-  - openssl=1.0.2o=h26aff7b_0
+  - openssl=1.0.2o
   - pandas=0.20.3=py36_0
   - pillow=4.2.1=py36_0
   - pip=9.0.1=py36_1
-  - protobuf=3.4.1=py36h314970b_0
+  - protobuf=3.4.1
   - pycparser=2.18=py36_0
   - pyparsing=2.2.0=py36_0
   - pyqt=5.6.0=py36_2
@@ -37,20 +33,20 @@ dependencies:
   - qt=5.6.2=2
   - readline=6.2=2
   - requests=2.14.2=py36_0
-  - scikit-learn=0.19.1=py36hffbff8c_0
-  - scipy=1.0.0=py36h1de22e9_0
+  - scikit-learn=0.19.1
+  - scipy=1.0.0
   - setuptools=36.4.0=py36_0
   - sip=4.18=py36_0
   - six=1.10.0=py36_0
   - sqlite=3.13.0=0
-  - tensorflow=1.1.0=np112py36_0
+  - tensorflow=1.1.0
   - tk=8.5.18=0
-  - werkzeug=0.12.2=py36h168efa1_0
+  - werkzeug=0.12.2
   - wheel=0.29.0=py36_0
   - xz=5.2.3=0
   - zlib=1.2.11=0
-  - pytorch=0.3.0=py36_cuda0.0_cudnn0.0h57b1bc9_4
-  - torchvision=0.2.0=py36hf5eb7ec_1
+  - pytorch
+  - torchvision
   - pip:
     - atari-py==0.1.1
     - beautifulsoup4==4.6.0
@@ -65,8 +61,6 @@ dependencies:
     - pywavelets==0.5.2
     - pyzmq==16.0.3
     - scikit-image==0.13.1
-    - torch==0.3.0.post4
-    - torchfile==0.1.0
     - tornado==4.5.3
     - visdom==0.1.6.5
     - vizdoom==1.1.4
