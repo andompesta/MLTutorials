@@ -31,9 +31,10 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
     RESET_FRAME = torch.zeros([4] + args.state_size)
 
     torch.manual_seed(args.seed)
+
     # local variable for plotting
-    update_reward = None
-    update_loss = None
+    p_rewards = []
+    p_losses = []
 
     # path variable
     video_path = path_join(args.monitor_path, exp_name)
@@ -146,23 +147,16 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
             torch.nn.utils.clip_grad_norm(q_network.parameters(), args.max_grad_norm)
             optimizer.step()
 
-            vis.line(Y=np.array([[loss.data[0], estimated_q_value.max().data[0]]]),
-                     X=np.array([[GLOBAL_STEP, GLOBAL_STEP]]),
-                     opts=dict(legend=["loss", "max_q_value"],
+            p_losses.append([loss.data[0], estimated_q_value.max().data[0], epsilon])
+            GLOBAL_STEP += 1
+
+            vis.line(Y=np.array(p_losses),
+                     X=np.repeat(np.expand_dims(np.arange(GLOBAL_STEP), 1), 3, axis=1),
+                     opts=dict(legend=["loss", "max_q_value", "epsilon"],
                                title="q_network",
                                showlegend=True),
-                     win="plane_q_network_{}".format(exp_name),
-                     update=update_loss)
-            vis.line(Y=np.array([epsilon]),
-                     X=np.array([GLOBAL_STEP]),
-                     opts=dict(legend=["epsilon"],
-                               title="epsilon",
-                               showlegend=True),
-                     win="plane_perfromance_{}".format(exp_name),
-                     update=update_loss)
+                     win="plane_q_network_{}".format(exp_name))
 
-            update_loss = "append"
-            GLOBAL_STEP += 1
 
             if (t == args.max_steps) or done:
                 stat = helper.EpisodeStat(t, env.get_total_reward())
@@ -175,17 +169,14 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer):
                 break
 
 
-
-        vis.line(Y=np.array([[stat.episode_reward, stat.episode_length, stat.avg_reward]]),
-                 X=np.array([[i_episode, i_episode, i_episode]]),
+        p_rewards.append([stat.episode_reward, stat.episode_length, stat.avg_reward])
+        vis.line(Y=np.array(p_rewards),
+                 X=np.repeat(np.expand_dims(np.arange(i_episode + 1), 1), 3, axis=1),
                  opts=dict(legend=["episode_reward", "episode_length", "average_reward"],
                            title="rewards",
                            showlegend=True),
-                 win="plane_reward_{}".format(exp_name),
-                 update=update_reward)
+                 win="plane_reward_{}".format(exp_name))
 
-
-        update_reward = "append"
         # vis.save(["main"])
         yield GLOBAL_STEP, stat
 
