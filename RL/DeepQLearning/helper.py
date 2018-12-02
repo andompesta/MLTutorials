@@ -1,10 +1,10 @@
 import numpy as np
-from skimage import transform
+from torchvision import transforms
 import os
 import torch
 import random
 from collections import namedtuple
-import matplotlib.pyplot as plt
+
 
 use_cuda = torch.cuda.is_available()
 
@@ -54,6 +54,13 @@ class ExperienceBuffer():
 
 
 def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10, left_offset_width=30, right_offset_width=30):
+
+    crop = (top_offset_height, bottom_offset_height, left_offset_width, right_offset_width)
+    img_trans = transforms.Compose([transforms.ToPILImage(),
+                                    transforms.Resize(state_size),
+                                    transforms.Grayscale(),
+                                    transforms.ToTensor()])
+
     def stack_frame(stacked_frames, state):
         """
         stack frame by frame on a queue of fixed length
@@ -61,48 +68,31 @@ def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10,
         :param state: 
         :return: 
         """
-        frame = state_processor(state, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width, state_size)
+
+        state = state_processor(state, crop, img_trans)
         # Append frame to deque, automatically removes the oldest frame
-        stacked_frames.append(frame)
+        stacked_frames.append(state)
 
         # Build the stacked state (first dimension specifies different frames)
         stacked_state = torch.stack(stacked_frames, dim=0)
         return stacked_state
     return stack_frame
 
-def state_processor(state, top_offset_height, bottom__offset_height, left_offset_width, right_offset_width, state_size):
+def state_processor(state, crop_size, transformations):
     """
-    Processes a raw Atari iamges. Resizes it and converts it to grayscale.
+    Processes a raw Atari iamges.
+    Crop the image according to the offset passed and apply the define transitions.
     No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
     experience replay
     :param state: A [210, 160, 3] Atari RGB State
+    :param crop_size: quatruple containing the crop offsets
+    :param transformations: image transformations to apply
+
     :return: A processed [84, 84, 1] state representing grayscale values.
     """
-
-    # image = img_rgb2gray(state)      # convert to grayscale
-    # image = img_crop_to_bounding_box(state, top_offset_height, bottom__offset_height, left_offset_width, right_offset_width)
-    # plt.imshow(state, cmap='gray')
-    # plt.show()
-    image = state/255.
-    image = img_resize(image, state_size)                # check aspect ration, otherwise convolution dim would not work
-    # plt.imshow(image, cmap='gray')
-    # plt.show()
-    return torch.from_numpy(image).type(torch.FloatTensor)
-
-def img_rgb2gray(img):
-    """
-    convert rgb images to gray scale
-    :param img: 4-D Tensor of shape `[batch, height, width, channels]` or 3-D Tensor of shape `[height, width, channels]`.
-    :return:
-    """
-    image_shape = img.shape
-
-    if len(image_shape) == 3:
-        crop_img = np.dot(img[..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-    else:
-        crop_img = np.dot(img[:, ..., :3], [0.299, 0.587, 0.114]).astype(np.uint8)
-    return crop_img
-
+    state = img_crop_to_bounding_box(state, *crop_size)
+    state = transformations(state)
+    return state.permute(1,2,0)
 
 def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width):
     """
@@ -114,20 +104,14 @@ def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_
     :return:
     """
     image_shape = img.shape
-    if len(image_shape) == 2:
-        img = img[top_offset_height:-bottom_offset_height, left_offset_width:-right_offset_width]
+    if len(image_shape) == 3:
+        h, w, c = image_shape
+        img = img[top_offset_height:(h-bottom_offset_height), left_offset_width:(w-right_offset_width)]
         return img
     else:
-        return img[:, top_offset_height:-bottom_offset_height, left_offset_width:-right_offset_width]
+        b, h, w, c = image_shape
+        return img[:, top_offset_height:(h-bottom_offset_height), left_offset_width:(w-right_offset_width)]
 
-def img_resize(img, size):
-    """
-    resize a given image
-    :param img: 4-D Tensor of shape `[batch, height, width, channels]` or 3-D Tensor of shape `[height, width, channels]`.
-    :param resize_factor: float or array for each axis
-    :return:
-    """
-    return transform.resize(img, size, mode='constant')
 
 def ensure_dir(file_path):
     '''
