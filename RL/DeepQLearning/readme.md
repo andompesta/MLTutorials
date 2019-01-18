@@ -28,7 +28,7 @@ Subsequently, a dense layer is used to estimate the q-values for each input stat
 The full model is specified in [Fig. 2](#fig-deep_q_learning_model).
 
 <p align="center">
-    <img src="./figures/deep_q_learning_model.png" width="900px" height="400px"/>
+    <img src="./figures/deep_q_learning_model.png" width="900px" height="350px"/>
     <br />
     <a name="fig-deep_q_learning_model"> Fig. 2: Deep Q-learning model</a>
 </p>
