@@ -4,13 +4,12 @@ import torch.nn as nn
 from torch.autograd import Variable
 import random
 import math
-from RL.DeepQLearning.helper import use_cuda
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
 
 
-def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions):
+def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, device):
     """
     Create a epsilon greedy policy function based on the given network Q-function
     :param network: network used to approximate the Q-function
@@ -19,15 +18,14 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions):
     def policy_fn(observation, steps_done):
         sample = random.random()
         eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * steps_done * eps_decay)
-        if sample > eps_threshold:
-            input = Variable(observation.unsqueeze(0), volatile=True)
-            if use_cuda:
-                input = input.cuda()
-            q_values = network.forward(input)[0]
-            best_action = torch.max(q_values.data, dim=0)[1]
-            return actions[best_action.cpu()[0]], eps_threshold
-        else:
-            return random.choice(actions), eps_threshold
+        with torch.set_grad_enabled(False):
+            if sample > eps_threshold:
+                input = observation.unsqueeze(0).to(device)
+                q_values = network.forward(input)[0]
+                best_action = torch.max(q_values, dim=0)[1]
+                return actions[best_action.cpu().item()], eps_threshold
+            else:
+                return random.choice(actions), eps_threshold
     return policy_fn
 
 
@@ -96,12 +94,11 @@ class DQN_Network(nn.Module):
                                            out_features=self.action_space))
 
         self._loss = nn.SmoothL1Loss()
-        self.reset_parameters()
 
     def reset_parameters(self):
         for p in self.parameters():
             if len(p.data.shape) > 1:
-                nn.init.xavier_uniform(p)
+                nn.init.xavier_uniform_(p)
 
 
     def forward(self, X):

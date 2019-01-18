@@ -3,12 +3,13 @@ from datetime import datetime
 import vizdoom as vz
 import random                # Handling random number generation
 import time
-
+from torchvision import transforms
+import numpy as np
 from RL.DeepQLearning import train
 from RL.DeepQLearning.model_dqn import DQN_Network
-from torch import optim, zeros
+import torch
 from visdom import Visdom
-from RL.DeepQLearning.helper import use_cuda, state_processor
+from RL.DeepQLearning.helper import frame_processor
 from os import path
 EXP_NAME = "exp-{}".format(datetime.now())
 
@@ -18,7 +19,7 @@ def __pars_args__():
     parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
-    parser.add_argument('-bs', '--batch_size', type=int, default=32, help='batch size used during learning')
+    parser.add_argument('-bs', '--batch_size', type=int, default=518, help='batch size used during learning')
 
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
@@ -39,6 +40,8 @@ def __pars_args__():
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[120, 120], help="Frame size")
+    parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
+    parser.add_argument("-v", "--version", type=str, default="v-0", help="Use cuda")
 
     return parser.parse_args()
 
@@ -46,23 +49,32 @@ def create_enviroment():
     game = vz.DoomGame()
     game.load_config(path.join("doom_setup", "doom_config.cfg"))
     game.set_doom_scenario_path(path.join("doom_setup", "basic.wad"))
+    game.set_window_visible(False)
     game.init()
     return game
 
 def test_environment(args):
-    game = vz.DoomGame()
-    game.load_config(path.join("doom_setup", "doom_config.cfg"))
-    game.set_doom_scenario_path(path.join("doom_setup", "basic.wad"))
-    game.init()
+    import matplotlib.pyplot as plt
+    game = create_enviroment()
+
+    crop = (50, 10, 30, 30)
+    img_trans = transforms.Compose([transforms.ToPILImage(),
+                                    transforms.Resize(args.state_size),
+                                    transforms.Grayscale(),
+                                    transforms.ToTensor()])
 
     episodes = 10
     for i in range(episodes):
         game.new_episode()
         while not game.is_episode_finished():
             state = game.get_state()
-            frame = state.screen_buffer
+            frame = np.expand_dims(state.screen_buffer, axis=-1)
             misc = state.game_variables
-            frame = state_processor(frame, 30, 10, 30, 30, args.state_size)
+            frame = frame_processor(frame, crop, img_trans)
+
+            plt.figure()
+            plt.imshow(frame[:,:, 0].numpy())
+            plt.show()
 
             action = random.choice(args.actions)
             print(action)
@@ -77,7 +89,9 @@ def test_environment(args):
 
 if __name__ == '__main__':
     args = __pars_args__()
+    # test_environment(args)
     env = create_enviroment()
+    device = torch.device("cuda:0" if args.use_cuda else "cpu")
 
     print("record_video_every:{}\treplay_memory_size:{}\treplay_memory_init_size:{}".format(args.record_video_every,
                                                                                             args.replay_memory_size,
@@ -97,11 +111,14 @@ if __name__ == '__main__':
                             fc_size=[3200, 512])
     t_network.eval()
 
-    if use_cuda:
-        q_network.cuda()
-        t_network.cuda()
+    q_network.to(device)
+    t_network.to(device)
+
+    q_network.reset_parameters()
+    t_network.reset_parameters()
+
 
     for t, stats in train.work(env, q_network, t_network, args, vis, EXP_NAME,
-                               optim.RMSprop(q_network.parameters(), lr=args.learning_rate)):
+                               torch.optim.RMSprop(q_network.parameters(), lr=args.learning_rate), device):
         print("\nEpisode Reward: {}".format(stats.episode_reward))
 

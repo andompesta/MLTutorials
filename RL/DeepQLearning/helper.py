@@ -4,6 +4,7 @@ import os
 import torch
 import random
 from collections import namedtuple
+import matplotlib.pyplot as plt
 
 
 use_cuda = torch.cuda.is_available()
@@ -56,12 +57,14 @@ class ExperienceBuffer():
 def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10, left_offset_width=30, right_offset_width=30):
 
     crop = (top_offset_height, bottom_offset_height, left_offset_width, right_offset_width)
+
+
     img_trans = transforms.Compose([transforms.ToPILImage(),
                                     transforms.Resize(state_size),
                                     transforms.Grayscale(),
                                     transforms.ToTensor()])
 
-    def stack_frame(stacked_frames, state):
+    def stack_frame(stacked_frames, frame):
         """
         stack frame by frame on a queue of fixed length
         :param stacked_frames: 
@@ -69,30 +72,37 @@ def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10,
         :return: 
         """
 
-        state = state_processor(state, crop, img_trans)
+        assert len(frame.shape) == 2
+        frame = frame_processor(frame, crop, img_trans)
         # Append frame to deque, automatically removes the oldest frame
-        stacked_frames.append(state)
+        stacked_frames.append(frame)
 
-        # Build the stacked state (first dimension specifies different frames)
-        stacked_state = torch.stack(stacked_frames, dim=0)
-        return stacked_state
+        # Build the state (first dimension specifies different frames)
+        state = torch.stack(list(stacked_frames), dim=0)
+        return state
     return stack_frame
 
-def state_processor(state, crop_size, transformations):
+def frame_processor(frame, crop_size, transformations):
     """
     Processes a raw Atari iamges.
     Crop the image according to the offset passed and apply the define transitions.
     No needed to make it batched because we process one frame at a time, while the network is trained in  batch trough 
     experience replay
-    :param state: A [210, 160, 3] Atari RGB State
+    :param frame: A [210, 160, 3] Atari RGB State
     :param crop_size: quatruple containing the crop offsets
     :param transformations: image transformations to apply
 
     :return: A processed [84, 84, 1] state representing grayscale values.
     """
-    state = img_crop_to_bounding_box(state, *crop_size)
-    state = transformations(state)
-    return state.permute(1,2,0)
+    frame = np.expand_dims(frame, axis=-1)
+    frame = img_crop_to_bounding_box(frame, *crop_size)
+    frame = transformations(frame)
+
+    # plt.figure()
+    # plt.imshow(frame[0].numpy(), cmap="gray")
+    # plt.show()
+
+    return frame[0]
 
 def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width):
     """
@@ -104,6 +114,10 @@ def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_
     :return:
     """
     image_shape = img.shape
+    if len(image_shape) == 2:
+        h, w = image_shape
+        img = img[top_offset_height:(h - bottom_offset_height), left_offset_width:(w - right_offset_width)]
+        return img
     if len(image_shape) == 3:
         h, w, c = image_shape
         img = img[top_offset_height:(h-bottom_offset_height), left_offset_width:(w-right_offset_width)]
@@ -122,3 +136,7 @@ def ensure_dir(file_path):
     if not os.path.exists(directory):
         os.makedirs(directory)
     return file_path
+
+
+def save_checkpoint(state, path, filename='checkpoint.pth.tar', version=0):
+    torch.save(state, ensure_dir(os.path.join(path, version, filename)))
