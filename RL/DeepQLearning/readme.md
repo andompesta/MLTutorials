@@ -13,12 +13,12 @@ Gym is vizdoom is required to run the enviroment's simulator.
 
 Instead of using a table, we employ a neural network to learn the expected future of an action.
 Namely, Doom is a complex environment; thus it is impractical to have a table for each possible state.
-Fig 1. represents the difference between Q-learning and Deep Q-learning where a neural network is used to approximate the q-values.
+[Fig 1.](#fig-deep_q_learning-vs-q_learning) represents the difference between Q-learning and Deep Q-learning where a neural network is used to approximate the q-values.
 
 
 <p align="center">
     <img src="./figures/deep_q_learning.png" width="600px" height="900px"/>
     <br />
-    <a name="fig-collision_enh"> Fig. 1: Deep Q-learning vs. Q-learning</a>
+    <a name="fig-deep_q_learning-vs-q_learning"> Fig. 1: Deep Q-learning vs. Q-learning</a>
 </p>
 
