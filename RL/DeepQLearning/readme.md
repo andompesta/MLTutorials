@@ -17,7 +17,7 @@ Fig 1. represents the difference between Q-learning and Deep Q-learning where a 
 
 
 <p align="center">
-    <img src="./figures/deep_q_learning.png" width="600px" height="1200px"/>
+    <img src="./figures/deep_q_learning.png" width="600px" height="900px"/>
     <br />
     <a name="fig-collision_enh"> Fig. 1: Deep Q-learning vs. Q-learning</a>
 </p>
