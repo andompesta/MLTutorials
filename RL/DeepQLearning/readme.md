@@ -7,4 +7,18 @@ All the code is based on @dennybritz RL tutorial (https://github.com/dennybritz/
 
 ## Requrements
 All the requred library are in the env.yml files.
-Gym is requred to run the enviroment's simulator.
+Gym is vizdoom is required to run the enviroment's simulator.
+
+## Deep Q-learning
+
+Instead of using a table, we employ a neural network to learn the expected future of an action.
+Namely, Doom is a complex environment; thus it is impractical to have a table for each possible state.
+Fig 1. represents the difference between Q-learning and Deep Q-learning where a neural network is used to approximate the q-values.
+
+
+<p align="center">
+    <img src="./figures/deep_q_learning.png" width="600px" height="1200px"/>
+    <br />
+    <a name="fig-collision_enh"> Fig. 1: Deep Q-learning vs. Q-learning</a>
+</p>
+
