@@ -37,5 +37,12 @@ Note that, a stack of 4 frames shapes our input feature (each frame is represent
 As output, we obtain a vector of Q-values. 
 The action associated to the highest Q-value is then performed by the agent.
 As we known, the Q-values represents our expected future reward. 
-Thus, it is not the real future reward, but over time we the network is getting better and better at estimating such expectation.
+Thus, it is not the real future reward, but over time the network is getting better and better at estimating such expectation.
+
+Based on the Bellman equation, the Q-learning update function is:
+<p align="center">
+    <img src="./figures/q_learning_update.png" width="900px" height="150px"/>
+    <br />
+    <a name="fig-deep_q_learning_model"> Eq. 1: Q-value update</a>
+</p>
  
