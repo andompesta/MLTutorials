@@ -22,3 +22,20 @@ Namely, Doom is a complex environment; thus it is impractical to have a table fo
     <a name="fig-deep_q_learning-vs-q_learning"> Fig. 1: Deep Q-learning vs. Q-learning</a>
 </p>
 
+## Network architecture
+A convolutional neural network is used to extract a set of feature from the environment.
+Subsequently, a dense layer is used to estimate the q-values for each input state and actions.
+The full model is specified in [Fig. 2](#fig-deep_q_learning_model).
+
+<p align="center">
+    <img src="./figures/deep_q_learning_model.png" width="900px" height="400px"/>
+    <br />
+    <a name="fig-deep_q_learning_model"> Fig. 2: Deep Q-learning model</a>
+</p>
+
+Note that, a stack of 4 frames shapes our input feature (each frame is represented in grey scale; thus the network's input is `batch-size x hight x width x 4`).
+As output, we obtain a vector of Q-values. 
+The action associated to the highest Q-value is then performed by the agent.
+As we known, the Q-values represents our expected future reward. 
+Thus, it is not the real future reward, but over time we the network is getting better and better at estimating such expectation.
+ 
