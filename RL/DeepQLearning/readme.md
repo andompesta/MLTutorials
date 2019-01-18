@@ -66,3 +66,11 @@ That is, we’re getting closer to our target but the target is also moving.
     <a name="eq-q_target_update"> Eq. 3: Q-target update functions</a>
 </p> 
 
+To solve such chicken and egg problem, researchers propose to use two different networks.
+One updated at each steps to estimate the Q-values.
+And one that has use freezed weights to estimate the Q-targets values. 
+<p align="center">
+    <img src="./figures/tn_q_target_update.png" width="900px"/>
+    <br />
+    <a name="eq-tn_q_target_update"> Eq. 4: Target Network update functions for estimate the Q-target values</a>
+</p> 
