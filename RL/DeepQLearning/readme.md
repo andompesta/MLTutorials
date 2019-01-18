@@ -47,7 +47,7 @@ Based on the Bellman equation, the Q-learning update function is:
 </p>
 However, in a Deep Q-learning environment rather we have to update our weights to reduce the TD-error:
 <p align="center">
-    <img src="./figures/deep_q_learning_update.png" width="900px" height="150px"/>
+    <img src="./figures/deep_q_learning_update.png" width="900px" height="170px"/>
     <br />
     <a name="fig-deep_q_learning_model"> Eq. 2: Deep Q-value update formula</a>
 </p> 
