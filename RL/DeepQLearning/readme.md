@@ -57,6 +57,9 @@ However, Deep Q-learning has to update its weight to reduce the TD-error:
 In [Eq. 2](#eq-deep_q_learning_update) we notice that the TD error is computed between the target Q-values (Q values at the next state and following a perfect policy) and the current estimate of the Q-values.
 Thus, the Deep Q-learning is an off-policy algorithm, because the Q-values are update following an e-greedy policy; while the Q-targets are computed with a perfect policy.
 However, the Q-targets are **estimated** (we don’t have any idea of the real TD target) using the same weights to estimate the Q-values.
+As a consequence, there is a big correlation between the Q-target and the parameters we are changing.
+Therefore, it means that at every step of training, our Q-values shift but also the Q-target values shifts. 
+That is, we’re getting closer to our target but the target is also moving. 
 <p align="center">
     <img src="./figures/q_target_update.png" width="800px" height="200px"/>
     <br />
