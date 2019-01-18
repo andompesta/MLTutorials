@@ -67,8 +67,7 @@ That is, we’re getting closer to our target but the target is also moving.
 </p> 
 
 To solve such chicken and egg problem, researchers propose to use two different networks.
-One updated at each steps to estimate the Q-values.
-And one that has use freezed weights to estimate the Q-targets values. 
+One updated at each steps to estimate the Q-values and one updated at every T steps to estimate the Q-targets values. 
 <p align="center">
     <img src="./figures/tn_q_target_update.png" width="900px"/>
     <br />
