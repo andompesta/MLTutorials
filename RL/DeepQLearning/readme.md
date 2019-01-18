@@ -61,7 +61,7 @@ As a consequence, there is a big correlation between the Q-target and the parame
 Therefore, it means that at every step of training, our Q-values shift but also the Q-target values shifts. 
 That is, we’re getting closer to our target but the target is also moving. 
 <p align="center">
-    <img src="./figures/q_target_update.png" width="650px"/>
+    <img src="./figures/q_target_update.png" width="450px"/>
     <br />
     <a name="eq-q_target_update"> Eq. 3: Q-target update functions</a>
 </p> 
