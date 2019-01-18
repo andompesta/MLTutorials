@@ -43,11 +43,23 @@ Based on the Bellman equation, the Q-learning update function is:
 <p align="center">
     <img src="./figures/q_learning_update.png" width="900px" height="150px"/>
     <br />
-    <a name="fig-deep_q_learning_model"> Eq. 1: Q-value update formula</a>
+    <a name="eq-q_learning_update"> Eq. 1: Q-value update formula</a>
 </p>
-However, in a Deep Q-learning environment rather we have to update our weights to reduce the TD-error:
+However, Deep Q-learning has to update its weight to reduce the TD-error:
 <p align="center">
     <img src="./figures/deep_q_learning_update.png" width="900px" height="190px"/>
     <br />
-    <a name="fig-deep_q_learning_model"> Eq. 2: Deep Q-value update formula</a>
+    <a name="eq-deep_q_learning_update"> Eq. 2: Deep Q-value update formula</a>
 </p> 
+
+
+## Fixed Q-targets
+In [Eq. 2](#eq-deep_q_learning_update) we notice that the TD error is computed between the target Q-values (Q values at the next state and following a perfect policy) and the current estimate of the Q-values.
+Thus, the Deep Q-learning is an off-policy algorithm, because the Q-values are update following an e-greedy policy; while the Q-targets are computed with a perfect policy.
+However, the Q-targets are **estimated** (we don’t have any idea of the real TD target) using the same weights to estimate the Q-values.
+<p align="center">
+    <img src="./figures/q_target_update.png" width="800px" height="200px"/>
+    <br />
+    <a name="eq-q_target_update"> Eq. 3: Q-target update functions</a>
+</p> 
+
