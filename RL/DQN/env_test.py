@@ -1,6 +1,6 @@
 import gym
 import numpy as np
-import RL.DeepQLearning.helper as helper
+import RL.DQN.helper as helper
 import matplotlib.pyplot as plt
 from torchvision import transforms
 

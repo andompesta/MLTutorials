@@ -3,9 +3,8 @@ import sys
 from os import path
 import numpy as np
 import torch
-from torch.autograd import Variable
-from RL.DeepQLearning.model_dqn import epsilon_greedy_policy
-import RL.DeepQLearning.helper as helper
+from RL.DQN.model_dqn import epsilon_greedy_policy
+import RL.helper as helper
 from collections import deque
 import random
 
@@ -69,7 +68,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     print("Populating replay memory...")
     env.new_episode()
     frame = env.get_state().screen_buffer
-    state = stack_frame_fn(stacked_frames, frame)
+
+    state = stack_frame_fn(stacked_frames, frame, True)
     for i in range(args.replay_memory_init_size):
         action = random.choice(args.actions)
         reward = env.make_action(action)
@@ -88,25 +88,28 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     stacked_frames.append(torch.zeros(args.state_size)) # add one empty frame to indicate a new episode
     for i_episode in range(args.num_episodes):
         # Save the current checkpoint
-        helper.save_checkpoint({
-            'episode': i_episode,
-            'state_dict': q_network.state_dict(),
-            'optimizer': optimizer.state_dict(),
-        },
-            path=summary_path,
-            filename='q_net-{}.cptk'.format(i_episode),
-            version=args.version
-        )
+        if i_episode % 200 == 0:
+            helper.save_checkpoint({
+                'episode': i_episode,
+                'state_dict': q_network.state_dict(),
+                'optimizer': optimizer.state_dict(),
+                'global_step': GLOBAL_STEP,
+                'replay_memory': replay_memory
+            },
+                path=summary_path,
+                filename='q_net-{}.cptk'.format(i_episode),
+                version=args.version
+            )
 
-        helper.save_checkpoint({
-            'episode': i_episode,
-            'state_dict': t_network.state_dict(),
-            'optimizer': optimizer.state_dict(),
-        },
-            path=summary_path,
-            filename='t_net-{}.cptk'.format(i_episode),
-            version=args.version
-        )
+            helper.save_checkpoint({
+                'episode': i_episode,
+                'state_dict': t_network.state_dict(),
+                'optimizer': optimizer.state_dict(),
+            },
+                path=summary_path,
+                filename='t_net-{}.cptk'.format(i_episode),
+                version=args.version
+            )
 
 
         env.new_episode()
@@ -161,9 +164,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
             assert t_network.training == False, "target network is training"
             # remove reward of final state
-            with torch.set_grad_enabled(False):
-                estimated_next_q_values[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0]
-                expected_q_values = reward_batch + (args.discount_factor * estimated_next_q_values)
+            estimated_next_q_values[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0].detach()
+            expected_q_values = reward_batch + (args.discount_factor * estimated_next_q_values)
 
             # Perform gradient descent update
             q_network.zero_grad()
