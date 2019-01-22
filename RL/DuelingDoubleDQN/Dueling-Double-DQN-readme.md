@@ -30,3 +30,14 @@ That is, we decompose `Q(s,a)` as:
     <a name="eq-deep_q_learning_update"> Eq. 2: Q-values decomposition</a>
 </p>
 
+With Dueling DQN, we want to separate the estimator of these two elements, using two new streams:
+- one that estimates the state value V(s)
+- one that estimates the advantage for each action A(s,a)
+The overall model structure is reported in [Fig. 1](#fig-dueling-model).
+<p align="center">
+    <img src="./figures/ddqn-model.png" width="900px" height="370px"/>
+    <br />
+    <a name="fig-dueling-model"> Fig. 1: DDQN model</a>
+</p>
+
+
