@@ -13,7 +13,7 @@ We:
 
 Formally, the TD-error is computed as:
 <p align="center">
-    <img src="./figures/double_dqn.png" width="900px" height="190px"/>
+    <img src="./figures/double_dqn.png" width="900px" height="220px"/>
     <br />
     <a name="eq-deep_q_learning_update"> Eq. 1: TD-error computed in the Double DQN</a>
 </p>
