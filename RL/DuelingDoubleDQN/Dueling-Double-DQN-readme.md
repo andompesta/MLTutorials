@@ -31,8 +31,16 @@ That is, we decompose `Q(s,a)` as:
 </p>
 
 With Dueling DQN, we want to separate the estimator of these two elements, using two new streams:
-- one that estimates the state value V(s)
-- one that estimates the advantage for each action A(s,a)
+- one that estimates the state value V(s);
+- one that estimates the advantage for each action A(s,a).
+
+Finally, we aggregate the two streams by a difference w.r.t. the mean values:
+<p align="center">
+    <img src="./figures/stream-merge.png" width="900px" height="200px"/>
+    <br />
+    <a name="eq-deep_q_learning_update"> Eq. 3: Stream merge</a>
+</p>
+ 
 The overall model structure is reported in [Fig. 1](#fig-dueling-model).
 <p align="center">
     <img src="./figures/ddqn-model.png" width="900px" height="370px"/>
