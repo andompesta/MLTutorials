@@ -12,6 +12,33 @@ use_cuda = torch.cuda.is_available()
 
 Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
 
+def get_cart_location(env, screen_width):
+    world_width = env.x_threshold * 2
+    scale = screen_width / world_width
+    return int(env.state[0] * scale + screen_width / 2.0)  # MIDDLE OF CART
+
+def get_screen(env):
+    # Returned screen requested by gym is 400x600x3, but is sometimes larger
+    # such as 800x1200x3. Transpose it into torch order (CHW).
+    screen = env.render(mode='rgb_array').transpose((2, 0, 1))
+    # Cart is in the lower half, so strip off the top and bottom of the screen
+    _, screen_height, screen_width = screen.shape
+    screen = screen[:, int(screen_height*0.4):int(screen_height * 0.8)]
+    view_width = int(screen_width * 0.6)
+    cart_location = get_cart_location(env, screen_width)
+    if cart_location < view_width // 2:
+        slice_range = slice(view_width)
+    elif cart_location > (screen_width - view_width // 2):
+        slice_range = slice(-view_width, None)
+    else:
+        slice_range = slice(cart_location - view_width // 2,
+                            cart_location + view_width // 2)
+    # Strip off the edges, so that we have a square image centered on a cart
+    screen = screen[:, :, slice_range]
+    screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
+    screen = torch.from_numpy(screen)
+    return screen
+
 class EpisodeStat(object):
     history_rew = []
     history_len = []
@@ -249,6 +276,9 @@ class Memory(object):  # stored as ( s, a, r, s_ ) in SumTree
 
 
 
+
+
+
 class ExperienceBuffer(object):
     def __init__(self, buffer_size=10000):
         '''
@@ -266,6 +296,7 @@ class ExperienceBuffer(object):
 
     def sample(self, size):
         samples = (random.sample(self.buffer, size))
+
         # state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*samples)
         #
         # state_batch = torch.stack(state_batch)
@@ -381,3 +412,62 @@ def ensure_dir(file_path):
 
 def save_checkpoint(state, path, filename='checkpoint.pth.tar', version=0):
     torch.save(state, ensure_dir(os.path.join(path, version, filename)))
+
+
+class PrioritizedReplayMemory(object):
+    def __init__(self, capacity, alpha=0.6, beta_start=0.4, beta_frames=100000):
+        self.prob_alpha = alpha
+        self.capacity = capacity
+        self.buffer = []
+        self.pos = 0
+        self.priorities = np.zeros((capacity,), dtype=np.float32)
+        self.frame = 1
+        self.beta_start = beta_start
+        self.beta_frames = beta_frames
+
+    def beta_by_frame(self, frame_idx):
+        return min(1.0, self.beta_start + frame_idx * (1.0 - self.beta_start) / self.beta_frames)
+
+    def store(self, transition):
+        max_prio = self.priorities.max() if self.buffer else 1.0 ** self.prob_alpha
+
+        if len(self.buffer) < self.capacity:
+            self.buffer.append(transition)
+        else:
+            self.buffer[self.pos] = transition
+
+        self.priorities[self.pos] = max_prio
+
+        self.pos = (self.pos + 1) % self.capacity
+
+    def sample(self, batch_size):
+        if len(self.buffer) == self.capacity:
+            prios = self.priorities
+        else:
+            prios = self.priorities[:self.pos]
+
+        total = len(self.buffer)
+
+        probs = prios / prios.sum()
+
+        indices = np.random.choice(total, batch_size, p=probs)
+        samples = [self.buffer[idx] for idx in indices]
+
+        beta = self.beta_by_frame(self.frame)
+        self.frame += 1
+
+        # min of ALL probs, not just sampled probs
+        prob_min = probs.min()
+        max_weight = (prob_min * total) ** (-beta)
+
+        weights = (total * probs[indices]) ** (-beta)
+        weights /= max_weight
+
+        return samples, indices, weights
+
+    def update_priorities(self, batch_indices, batch_priorities):
+        for idx, prio in zip(batch_indices, batch_priorities):
+            self.priorities[idx] = (prio + 1e-5) ** self.prob_alpha
+
+    def __len__(self):
+        return len(self.buffer)

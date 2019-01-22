@@ -139,7 +139,7 @@ class DDDQN_Network(nn.Module):
         q_value = torch.sum(torch.mul(q_values, actions), dim=1)
         return q_value
 
-    def compute_loss(self, q_values, q_target):
+    def compute_loss(self, q_values, q_target, weights):
         """
         compute the loss between the q-values taken w.r.t the optimal ones
         :param q_values: current estimation of the state-action values obtained following an e-greedy policy
@@ -148,6 +148,6 @@ class DDDQN_Network(nn.Module):
         :return: 
         """
 
-        # aboslute_error = torch.abs(q_target - q_values)
-        self.loss = torch.mean(self._loss(q_target, q_values))
-        return self.loss
+        absolute_error = torch.abs(q_target - q_values)
+        self.loss =  torch.mean(weights * self._loss(q_target, q_values))
+        return self.loss, absolute_error

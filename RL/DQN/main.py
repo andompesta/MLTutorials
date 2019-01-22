@@ -16,7 +16,7 @@ EXP_NAME = "exp-{}".format(datetime.now())
 def __pars_args__():
     parser = argparse.ArgumentParser(description='DQN')
 
-    parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
+    parser.add_argument('--max_grad', type=float, default=1, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
     parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
     parser.add_argument('-bs', '--batch_size', type=int, default=64, help='batch size used during learning')

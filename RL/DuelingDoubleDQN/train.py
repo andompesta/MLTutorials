@@ -13,6 +13,9 @@ if "../" not in sys.path:
   sys.path.append("../")
 
 GLOBAL_STEP = 0
+PRIORITY_ALPHA=0.6
+PRIORITY_BETA_START=0.4
+PRIORITY_BETA_FRAMES = 100000
 
 def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     """
@@ -49,8 +52,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     #                                           )
 
     stack_frame_fn = helper.stack_frame_setup(args.state_size,
-                                              top_offset_height=100,
-                                              bottom_offset_height=60,
+                                              top_offset_height=0,
+                                              bottom_offset_height=0,
                                               left_offset_width=0,
                                               right_offset_width=0
                                               )
@@ -59,7 +62,10 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
         optimizer = torch.optim.Adagrad(q_network.parameters(), lr=args.learning_rate)
 
     # Keeps track of useful statistics
-    replay_memory = helper.ExperienceBuffer(args.replay_memory_size)
+    replay_memory = helper.PrioritizedReplayMemory(capacity=args.replay_memory_size,
+                                                   alpha=PRIORITY_ALPHA,
+                                                   beta_start=PRIORITY_BETA_START,
+                                                   beta_frames=PRIORITY_BETA_FRAMES)
 
 
     # The policy we're following
@@ -76,7 +82,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     # env.new_episode()
     # frame = env.get_state().screen_buffer
     env.reset()
-    frame = env.render(mode='rgb_array')
+    frame = helper.get_screen(env)
 
     state = stack_frame_fn(stacked_frames, frame, True)
     for i in range(args.replay_memory_init_size):
@@ -90,22 +96,22 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
 
         if done:
-            transition = (state, action, reward, RESET_FRAME, float(done))
+            transition = helper.Transition(state, action, reward, RESET_FRAME, int(done))
             replay_memory.store(transition)
 
             # start new episode
             # env.new_episode()
             # frame = env.get_state().screen_buffer
             env.reset()
-            frame = env.render(mode='rgb_array')
+            frame = helper.get_screen(env)
 
             state = stack_frame_fn(stacked_frames, frame, True)
         else:
             # frame = env.get_state().screen_buffer
-            frame = env.render(mode='rgb_array')
+            frame = helper.get_screen(env)
 
             next_state = stack_frame_fn(stacked_frames, frame)
-            transition = (state, action, reward, next_state, float(done))
+            transition = helper.Transition(state, action, reward, next_state, int(done))
             replay_memory.store(transition)
             state = next_state
 
@@ -125,10 +131,9 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             # Save the current checkpoint
             helper.save_checkpoint({
                 'episode': i_episode,
-                'state_dict': q_network.state_dict(),
-                'optimizer': optimizer.state_dict(),
+                'state_dict': q_network.cpu().state_dict(),
+                'optimizer': optimizer.cpu().state_dict(),
                 'global_step': GLOBAL_STEP,
-                'replay_memory': replay_memory
             },
                 path=summary_path,
                 filename='q_net-{}.cptk'.format(i_episode),
@@ -137,8 +142,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
             helper.save_checkpoint({
                 'episode': i_episode,
-                'state_dict': t_network.state_dict(),
-                'optimizer': optimizer.state_dict(),
+                'state_dict': t_network.cpu().state_dict(),
             },
                 path=summary_path,
                 filename='t_net-{}.cptk'.format(i_episode),
@@ -148,7 +152,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
         # env.new_episode()
         # frame = env.get_state().screen_buffer
         env.reset()
-        frame = env.render(mode='rgb_array')
+        frame = helper.get_screen(env)
         state = stack_frame_fn(stacked_frames, frame, True)
         total_reward = 0
 
@@ -173,35 +177,37 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             # done = env.is_episode_finished()
 
             if done:
-                transition = (state, action, reward, RESET_FRAME, float(done))
+                transition = helper.Transition(state, action, reward, RESET_FRAME, int(done))
                 replay_memory.store(transition)
 
                 # start new episode
                 # env.new_episode()
                 # frame = env.get_state().screen_buffer
                 env.reset()
-                frame = env.render(mode='rgb_array')
-
+                frame = helper.get_screen(env)
                 state = stack_frame_fn(stacked_frames, frame, True)
             else:
                 # frame = env.get_state().screen_buffer
-                frame = env.render(mode='rgb_array')
+                frame = helper.get_screen(env)
                 next_state = stack_frame_fn(stacked_frames, frame)
+                transition = helper.Transition(state, action, reward, next_state, int(done))
 
-                replay_memory.store((state, action, reward, next_state, float(done)))
+                replay_memory.store(transition)
                 state = next_state
 
             # OPTIMIZE MODEL
             # Sample a minibatch from the replay memory
             # tree_idx, batch, ISWeights = replay_memory.sample(args.batch_size)
-            batch = replay_memory.sample(args.batch_size)
+            batch, idx, weights = replay_memory.sample(args.batch_size)
             state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*batch)
+
 
             state_batch = torch.stack(state_batch, dim=0).to(device)
             action_batch = torch.tensor(action_batch).float().to(device)
             reward_batch = torch.tensor(reward_batch).to(device)
             next_state_batch = torch.stack(next_state_batch, dim=0).to(device)
             done_batch = torch.tensor(done_batch).to(device)
+            weights = torch.tensor(weights).to(device)
 
             # Compute a mask of non-final states and concatenate the batch elements\
             # non_final_mask = torch.tensor(list(map(lambda s: not torch.equal(s, RESET_FRAME), next_state_batch))).byte().to(device)
@@ -212,8 +218,9 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
 
             assert t_network.training == False, "target network is training"
-            q_target_next_state[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0].detach()
-            q_target_batch = reward_batch + (args.discount_factor * q_target_next_state)
+            with torch.no_grad():
+                q_target_next_state[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0]
+                q_target_batch = reward_batch + (args.discount_factor * q_target_next_state)
 
 
             # Calculate q values and targets
@@ -221,13 +228,17 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                 q_value_batch = q_network.compute_q_value(state_batch, action_batch)
 
             # Perform gradient descent update
-            q_network.zero_grad()
-            loss = q_network.compute_loss(q_value_batch, q_target_batch)
+            loss, diff = q_network.compute_loss(q_value_batch, q_target_batch, weights)
+
+            optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(q_network.parameters(), args.max_grad_norm)
+            for param in q_network.parameters():
+                param.grad.data.clamp_(-1, 1)
+            # torch.nn.utils.clip_grad_norm_(q_network.parameters(), args.max_grad_norm)
             optimizer.step()
 
             # Update priority
+            replay_memory.update_priorities(idx, diff.detach().squeeze().cpu().numpy().tolist())
             # replay_memory.batch_update(tree_idx, absolute_errors)
 
             p_losses.append([loss.item(), q_target_batch.max().item(), epsilon])

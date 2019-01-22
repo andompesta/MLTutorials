@@ -34,11 +34,11 @@ def __pars_args__():
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.95, help='Reward discount factor')
     parser.add_argument("-es", "--epsilon_start", type=float, default=0.9, help="starting epsilon")
     parser.add_argument("-ee", "--epsilon_end", type=float, default=0.01, help="ending epsilon")
-    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.00005,
+    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.0005,
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=200,
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[120, 120], help="Frame size")
