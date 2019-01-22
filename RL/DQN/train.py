@@ -124,7 +124,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             helper.save_checkpoint({
                 'episode': i_episode,
                 'state_dict': q_network.cpu().state_dict(),
-                'optimizer': optimizer.cpu().state_dict(),
+                'optimizer': optimizer.state_dict(),
                 'global_step': GLOBAL_STEP,
             },
                 path=summary_path,
@@ -238,7 +238,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
 
             if (t == args.max_steps) or done:
-                stat = helper.EpisodeStat(t, env.get_total_reward())
+                stat = helper.EpisodeStat(t, total_reward)
 
                 print('Episode: {}'.format(i_episode),
                       'Episode length: {}'.format(stat.episode_length),

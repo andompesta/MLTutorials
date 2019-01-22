@@ -9,7 +9,7 @@ from RL.DQN import train
 from RL.DQN.model_dqn import DQN_Network
 import torch
 from visdom import Visdom
-from RL.DQN.helper import frame_processor
+from RL.helper import frame_processor
 from os import path
 EXP_NAME = "exp-{}".format(datetime.now())
 
@@ -26,32 +26,38 @@ def __pars_args__():
 
     parser.add_argument("-u_target", "--update_target_estimator_every", default=350,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=100000, help="Number of episodes to run for")
-    parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
+    parser.add_argument("-ne", "--num_episodes", type=int, default=1000, help="Number of episodes to run for")
+    # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
+    parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
+                        help='possible actions')
     parser.add_argument('-nf', '--number_frames', type=int, default=4, help='number of frame for each state')
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
     parser.add_argument("-es", "--epsilon_start", type=float, default=0.9, help="starting epsilon")
     parser.add_argument("-ee", "--epsilon_end", type=float, default=0.01, help="ending epsilon")
-    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.0005,
+    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.005,
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
-    parser.add_argument("-rm", "--replay_memory_size", type=int, default=20000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=2500,
+    parser.add_argument("-rm", "--replay_memory_size", type=int, default=100000, help="Size of the replay memory")
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=1000,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[120, 120], help="Frame size")
-    parser.add_argument("-uc", "--use_cuda", type=bool, default=True, help="Use cuda")
+    parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
     parser.add_argument("-v", "--version", type=str, default="v-0", help="Use cuda")
 
     return parser.parse_args()
 
 def create_enviroment():
-    game = vz.DoomGame()
-    game.load_config(path.join("../", "doom_setup", "doom_config.cfg"))
-    game.set_doom_scenario_path(path.join("../", "doom_setup", "basic.wad"))
-    game.set_window_visible(False)
-    game.init()
-    return game
+    # env = vz.DoomGame()
+    # env.load_config(path.join("../", "doom_setup", "doom_config.cfg"))
+    # env.set_doom_scenario_path(path.join("../", "doom_setup", "basic.wad"))
+    # env.set_window_visible(False)
+    # env.init()
+
+    import gym
+    env = gym.make('CartPole-v0')
+    env = env.unwrapped
+    return env
 
 def test_environment(args):
     import matplotlib.pyplot as plt

@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-import random
 import math
 EPS_START = 0.9
 EPS_END = 0.05
@@ -15,16 +14,16 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
     :return: action
     """
     def policy_fn(observation, steps_done):
-        sample = random.random()
+        sample = np.random.random()
         eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * steps_done * eps_decay)
-        with torch.set_grad_enabled(False):
+        with torch.no_grad():
             if sample > eps_threshold:
                 input = observation.unsqueeze(0).to(device)
                 q_values = network.forward(input)[0]
                 best_action = torch.max(q_values, dim=0)[1]
                 return best_action.cpu().item(), eps_threshold
             else:
-                return random.randint(0, len(actions)), eps_threshold
+                return np.random.randint(low=0, high=len(actions)), eps_threshold
     return policy_fn
 
 

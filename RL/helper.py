@@ -40,8 +40,8 @@ def get_screen(env):
     return screen
 
 class EpisodeStat(object):
-    history_rew = []
-    history_len = []
+    history_rew = deque(maxlen=100)
+    history_len = deque(maxlen=100)
     def __init__(self, episode_length, episode_reward):
         self.episode_length = episode_length
         self.episode_reward = episode_reward

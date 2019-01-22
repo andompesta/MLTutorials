@@ -26,7 +26,7 @@ def __pars_args__():
 
     parser.add_argument("-u_target", "--update_target_estimator_every", default=350,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=100000, help="Number of episodes to run for")
+    parser.add_argument("-ne", "--num_episodes", type=int, default=1000, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
     parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
                         help='possible actions')
