@@ -6,7 +6,8 @@ import torch
 from RL.DQN.model_dqn import epsilon_greedy_policy
 import RL.helper as helper
 from collections import deque
-import random
+from torchvision import transforms
+from PIL import Image
 
 
 if "../" not in sys.path:
@@ -27,8 +28,6 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     :return: 
     """
     global GLOBAL_STEP
-    RESET_FRAME = torch.zeros([4] + args.state_size)
-
     torch.manual_seed(args.seed)
 
     # local variable for plotting
@@ -36,30 +35,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     p_losses = []
 
     # path variable
-    video_path = path.join(args.monitor_path, exp_name)
     summary_path = path.join(args.model_path, exp_name)
     helper.ensure_dir(summary_path)
-    helper.ensure_dir(video_path)
-
-    # stack_frame_fn = helper.stack_frame_setup(args.state_size,
-    #                                           top_offset_height=50,
-    #                                           bottom_offset_height=10,
-    #                                           left_offset_width=30,
-    #                                           right_offset_width=30
-    #                                           )
-
-    stack_frame_fn = helper.stack_frame_setup(args.state_size,
-                                              top_offset_height=0,
-                                              bottom_offset_height=0,
-                                              left_offset_width=0,
-                                              right_offset_width=0
-                                              )
-
-    if optimizer is None:
-        optimizer = torch.optim.Adagrad(q_network.parameters(), lr=args.learning_rate)
 
     # Keeps track of useful statistics
-    replay_memory = helper.ExperienceBuffer(buffer_size=args.replay_memory_size)
+    replay_memory = helper.ReplayMemory(args.replay_memory_size)
 
 
     # The policy we're following
@@ -69,53 +49,42 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                                    args.epsilon_decay_rate,
                                    args.actions, device)
 
-    stacked_frames = deque([torch.zeros(args.state_size) for i in range(args.number_frames)], maxlen=args.number_frames)
-
     # Populate the replay memory with initial experience
     print("Populating replay memory...")
-
-    # env.new_episode()
-    # frame = env.get_state().screen_buffer
     env.reset()
-    frame = helper.get_screen(env)
+    last_frame = helper.get_screen(env)
+    current_frame = helper.get_screen(env)
+    state = current_frame - last_frame
 
-    state = stack_frame_fn(stacked_frames, frame, True)
     for i in range(args.replay_memory_init_size):
-        # action = random.choice(args.actions)
-        # reward = env.make_action(action)
-        # done = env.is_episode_finished()
+        action = env.action_space.sample()
+        _, reward, done, _ = env.step(action)
 
-        action_idx = env.action_space.sample()
-        action = args.actions[action_idx]
-        _, reward, done, _ = env.step(action_idx)
+        # Observe new state
+        last_frame = current_frame
+        current_frame = helper.get_screen(env)
 
-        if done:
-            transition = helper.Transition(state, action, reward, RESET_FRAME, int(done))
-            replay_memory.store(transition)
-
-            # start new episode
-            # env.new_episode()
-            # frame = env.get_state().screen_buffer
-            env.reset()
-            frame = helper.get_screen(env)
-
-            state = stack_frame_fn(stacked_frames, frame, True)
+        if not done:
+            next_state = current_frame - last_frame
         else:
-            # frame = env.get_state().screen_buffer
-            frame = helper.get_screen(env)
+            next_state = None
 
-            next_state = stack_frame_fn(stacked_frames, frame)
-            transition = helper.Transition(state, action, reward, next_state, int(done))
-            replay_memory.store(transition)
+
+        transition = helper.Transition(state, action, reward, next_state, int(done))
+        replay_memory.store(transition)
+
+        # Move to the next state
+        if not done:
             state = next_state
-
-    update_param = True  # variable use to update the parameter of the t_net
+        else:
+            env.reset()
+            last_frame = helper.get_screen(env)
+            current_frame = helper.get_screen(env)
+            state = current_frame - last_frame
 
     for i_episode in range(args.num_episodes):
-
-        if update_param:
-            # update t_net params
-            update_param = False
+        # Update params
+        if i_episode % args.update_target_estimator_every == 0:
             t_network.load_state_dict(q_network.state_dict())
             print("\nCopied model parameters to target network.")
 
@@ -142,55 +111,31 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             )
 
 
-        # env.new_episode()
-        # frame = env.get_state().screen_buffer
-        # state = stack_frame_fn(stacked_frames, frame, True)
-
         env.reset()
-        frame = helper.get_screen(env)
-        state = stack_frame_fn(stacked_frames, frame, True)
-        total_reward = 0
-
-
+        last_frame = helper.get_screen(env)
+        current_frame = helper.get_screen(env)
+        state = current_frame - last_frame
 
         # One step in the environment
         for t in itertools.count():
-            # Update params
-            if GLOBAL_STEP % args.update_target_estimator_every == 0:
-                update_param = True
 
             # Print out which step we're on, useful for debugging.
             print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
             sys.stdout.flush()
 
-            action_idx, epsilon = policy(state, GLOBAL_STEP)
-            action = args.actions[action_idx]
+            action, epsilon = policy(state, GLOBAL_STEP)
+            _, reward, done, _ = env.step(action)
 
-            _, reward, done, _ = env.step(action_idx)
-            total_reward += reward
-
-            # action, epsilon = policy(state, GLOBAL_STEP)
-            # reward = env.make_action(action)
-            # done = env.is_episode_finished()
-
-            if done:
-                transition = helper.Transition(state, action, reward, RESET_FRAME, int(done))
-                replay_memory.store(transition)
-
-                # start new episode
-                # env.new_episode()
-                # frame = env.get_state().screen_buffer
-                env.reset()
-                frame = helper.get_screen(env)
-                state = stack_frame_fn(stacked_frames, frame, True)
+            # Observe new state
+            last_frame = current_frame
+            current_frame = helper.get_screen(env)
+            if not done:
+                next_state = current_frame - last_frame
             else:
-                # frame = env.get_state().screen_buffer
-                frame = helper.get_screen(env)
-                next_state = stack_frame_fn(stacked_frames, frame)
-                transition = helper.Transition(state, action, reward, next_state, int(done))
+                next_state = None
 
-                replay_memory.store(transition)
-                state = next_state
+            transition = helper.Transition(state, action, reward, next_state, int(done))
+            replay_memory.store(transition)
 
             # OPTIMIZE MODEL
             # Sample a minibatch from the replay memory
@@ -198,32 +143,37 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*batch)
 
             state_batch = torch.stack(state_batch, dim=0).to(device)
-            action_batch = torch.tensor(action_batch).float().to(device)
+            action_batch = torch.tensor(action_batch).long().to(device)
             reward_batch = torch.tensor(reward_batch).to(device)
-            next_state_batch = torch.stack(next_state_batch, dim=0).to(device)
-            done_batch = torch.tensor(done_batch).to(device)
+            # next_state_batch = torch.stack(next_state_batch, dim=0).to(device)
+            # done_batch = torch.tensor(done_batch).to(device)
 
 
             # Compute a mask of non-final states and concatenate the batch elements
-            non_final_mask = (1 - done_batch).byte().to(device)
-            non_final_next_states = next_state_batch[non_final_mask].to(device)
-            q_target_next_state = torch.zeros(args.batch_size).to(device)
+            non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                                    next_state_batch)), device=device, dtype=torch.uint8)
+            non_final_next_states = torch.stack([s for s in next_state_batch
+                                               if s is not None])
+            q_target_next_state = torch.zeros(args.batch_size, device=device)
 
-            assert t_network.training == False, "target network is training"
-            with torch.no_grad():
-                # remove reward of final state
-                q_target_next_state[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0]
-                q_target_batch = reward_batch + (args.discount_factor * q_target_next_state)
+            # non_final_mask = (1 - done_batch).byte().to(device)
+            # non_final_next_states = next_state_batch[non_final_mask].to(device)
+            # q_target_next_state = torch.zeros(args.batch_size).to(device)
 
-            # Calculate q values and targets
-            with torch.set_grad_enabled(True):
-                q_value_batch = q_network.compute_q_value(state_batch, action_batch)
-                loss = q_network.compute_loss(q_value_batch, q_target_batch)
+            # remove reward of final state
+            q_target_next_state[non_final_mask] = t_network.forward(non_final_next_states).max(dim=1)[0].detach()
+            q_target_batch = reward_batch + (args.discount_factor * q_target_next_state)
+
+
+            q_value_batch = q_network.compute_q_value(state_batch, action_batch)
+            loss = q_network.compute_loss(q_value_batch, q_target_batch)
 
             # Perform gradient descent update
             q_network.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_value_(q_network.parameters(), args.max_grad)
+            # torch.nn.utils.clip_grad_value_(q_network.parameters(), args.max_grad)
+            for param in q_network.parameters():
+                param.grad.data.clamp_(-1, 1)
             optimizer.step()
 
             p_losses.append([loss.item(), q_value_batch.max().item(), epsilon])
@@ -238,7 +188,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
 
             if (t == args.max_steps) or done:
-                stat = helper.EpisodeStat(t, total_reward)
+                stat = helper.EpisodeStat(t+1, t + 1)
 
                 print('Episode: {}'.format(i_episode),
                       'Episode length: {}'.format(stat.episode_length),

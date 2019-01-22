@@ -16,14 +16,14 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
     def policy_fn(observation, steps_done):
         sample = np.random.random()
         eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * steps_done * eps_decay)
-        with torch.no_grad():
-            if sample > eps_threshold:
+        if sample > eps_threshold:
+            with torch.no_grad():
                 input = observation.unsqueeze(0).to(device)
                 q_values = network.forward(input)[0]
                 best_action = torch.max(q_values, dim=0)[1]
                 return best_action.cpu().item(), eps_threshold
-            else:
-                return np.random.randint(low=0, high=len(actions)), eps_threshold
+        else:
+            return np.random.randint(low=0, high=len(actions)), eps_threshold
     return policy_fn
 
 
@@ -63,32 +63,31 @@ class DQN_Network(nn.Module):
         assert len(fc_size) == 2
         self.fc_size = fc_size
 
+        self.conv1 = nn.Sequential(nn.Conv2d(in_channels=3,
+                                             out_channels=16,
+                                             kernel_size=5,
+                                             stride=2),
+                                   nn.BatchNorm2d(16),
+                                   nn.ReLU())
 
-        self.conv1 = nn.Sequential(nn.Conv2d(in_channels=self.n_frame_input,
-                                             out_channels=self.out_channels[0],
-                                             kernel_size=(kernels_size[0], kernels_size[0]),
-                                             stride=self.strides[0]),
-                                   nn.BatchNorm2d(self.out_channels[0]),
-                                   nn.ELU())
+        self.conv2 = nn.Sequential(nn.Conv2d(in_channels=16,
+                                             out_channels=32,
+                                             kernel_size=5,
+                                             stride=2),
+                                   nn.BatchNorm2d(32),
+                                   nn.ReLU())
 
-        self.conv2 = nn.Sequential(nn.Conv2d(in_channels=self.out_channels[0],
-                                             out_channels=self.out_channels[1],
-                                             kernel_size=(kernels_size[1], kernels_size[1]),
-                                             stride=self.strides[1]),
-                                   nn.BatchNorm2d(self.out_channels[1]),
-                                   nn.ELU())
+        self.conv3 = nn.Sequential(nn.Conv2d(in_channels=32,
+                                             out_channels=32,
+                                             kernel_size=5,
+                                             stride=2),
+                                   nn.BatchNorm2d(32),
+                                   nn.ReLU())
 
-        self.conv3 = nn.Sequential(nn.Conv2d(in_channels=self.out_channels[1],
-                                             out_channels=self.out_channels[2],
-                                             kernel_size=(kernels_size[2], kernels_size[2]),
-                                             stride=self.strides[2]),
-                                   nn.BatchNorm2d(self.out_channels[2]),
-                                   nn.ELU())
-
-        self.fc1 = nn.Sequential(nn.Linear(in_features=self.fc_size[0],
-                                           out_features=self.fc_size[1]),
-                                 nn.ELU())
-        self.fc2 = nn.Sequential(nn.Linear(in_features=self.fc_size[1],
+        # self.fc1 = nn.Sequential(nn.Linear(in_features=self.fc_size[0],
+        #                                    out_features=self.fc_size[1]),
+        #                          nn.ELU())
+        self.fc2 = nn.Sequential(nn.Linear(in_features=512,
                                            out_features=self.action_space))
 
         self._loss = nn.SmoothL1Loss()
@@ -107,8 +106,8 @@ class DQN_Network(nn.Module):
         X_conv3 = self.conv3(X_conv2)
 
         X_flatten = X_conv3.view(batch_size, -1)
-        X_fc1 = self.fc1(X_flatten)
-        prediction = self.fc2(X_fc1)
+        # X_fc1 = self.fc1(X_flatten)
+        prediction = self.fc2(X_flatten)
         return prediction
 
     def compute_q_value(self, states, actions):
@@ -117,9 +116,10 @@ class DQN_Network(nn.Module):
         :param actions: an array of action
         :return: 
         """
-        estimated_state_values = self.forward(states)
-        estimated_q_values = torch.sum(torch.mul(estimated_state_values, actions), dim=1, keepdim=True)
-        return estimated_q_values
+        state_values = self.forward(states)
+        # estimated_q_values = torch.sum(torch.mul(estimated_state_values, actions), dim=1, keepdim=True)
+        state_action_values = state_values.gather(1, actions.unsqueeze(-1))
+        return state_action_values
 
     def compute_loss(self, estimated_q_values, expected_q_values):
         """

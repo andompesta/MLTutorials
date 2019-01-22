@@ -16,35 +16,34 @@ EXP_NAME = "exp-{}".format(datetime.now())
 def __pars_args__():
     parser = argparse.ArgumentParser(description='DD-DQN')
 
-    parser.add_argument('--max_grad_norm', type=float, default=100, help='value loss coefficient (default: 100)')
+    parser.add_argument('--max_grad', type=float, default=1, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-    parser.add_argument('-lr', '--learning_rate', type=float, default=0.00025, help='learning rate (default: 0.001)')
-    parser.add_argument('-bs', '--batch_size', type=int, default=64, help='batch size used during learning')
+    parser.add_argument('-lr', '--learning_rate', type=float, default=0.01, help='learning rate (default: 0.001)')
+    parser.add_argument('-bs', '--batch_size', type=int, default=128, help='batch size used during learning')
 
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
 
-    parser.add_argument("-u_target", "--update_target_estimator_every", default=350,
+    parser.add_argument("-u_target", "--update_target_estimator_every", default=10,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=1000, help="Number of episodes to run for")
+    parser.add_argument("-ne", "--num_episodes", type=int, default=100, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
     parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
                         help='possible actions')
     parser.add_argument('-nf', '--number_frames', type=int, default=4, help='number of frame for each state')
-    parser.add_argument('-ds', '--discount_factor', type=float, default=0.95, help='Reward discount factor')
+    parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
     parser.add_argument("-es", "--epsilon_start", type=float, default=0.9, help="starting epsilon")
-    parser.add_argument("-ee", "--epsilon_end", type=float, default=0.01, help="ending epsilon")
-    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.0005,
+    parser.add_argument("-ee", "--epsilon_end", type=float, default=0.05, help="ending epsilon")
+    parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.005,
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
-    parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
+    parser.add_argument("-rm", "--replay_memory_size", type=int, default=100000, help="Size of the replay memory")
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=1000,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
-    parser.add_argument("--state_size", type=list, default=[120, 120], help="Frame size")
+    parser.add_argument("--state_size", type=list, default=[40, 90], help="Frame size")
     parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
     parser.add_argument("-v", "--version", type=str, default="v-0", help="Use cuda")
-    parser.add_argument("--show_window", type=bool, default=False, help="Show environment window")
 
     return parser.parse_args()
 
@@ -129,13 +128,15 @@ if __name__ == '__main__':
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
-                            fc_size=[3200, 1024])
+                            fc_size=[384, 128])
+    # fc_size=[3200, 512])
 
     t_network = DDDQN_Network(args.batch_size, len(args.actions), args.number_frames,
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
-                            fc_size=[3200, 1024])
+                            fc_size=[384, 128])
+    # fc_size=[3200, 512])
 
 
     q_network.to(device)

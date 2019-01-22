@@ -115,15 +115,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             replay_memory.store(transition)
             state = next_state
 
-    update_param = True # variable use to update the parameter of the t_net
-
-
     print("start training")
     for i_episode in range(args.num_episodes):
 
-        if update_param:
-            # update t_net params
-            update_param = False
+        # Update params
+        if i_episode % args.update_target_estimator_every == 0:
             t_network.load_state_dict(q_network.state_dict())
             print("\nCopied model parameters to target network.")
 
@@ -132,7 +128,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             helper.save_checkpoint({
                 'episode': i_episode,
                 'state_dict': q_network.cpu().state_dict(),
-                'optimizer': optimizer.cpu().state_dict(),
+                'optimizer': optimizer.state_dict(),
                 'global_step': GLOBAL_STEP,
             },
                 path=summary_path,
@@ -158,11 +154,6 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
         # One step in the environment
         for t in itertools.count():
-            # Update params
-            if GLOBAL_STEP % args.update_target_estimator_every == 0:
-                update_param = True
-
-
 
             # Print out which step we're on, useful for debugging.
             print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
@@ -234,7 +225,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             loss.backward()
             for param in q_network.parameters():
                 param.grad.data.clamp_(-1, 1)
-            # torch.nn.utils.clip_grad_norm_(q_network.parameters(), args.max_grad_norm)
+            torch.nn.utils.clip_grad_value_(q_network.parameters(), args.max_grad)
             optimizer.step()
 
             # Update priority
