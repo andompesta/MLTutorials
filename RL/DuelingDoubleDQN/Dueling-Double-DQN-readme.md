@@ -19,3 +19,14 @@ Formally, the TD-error is computed as:
 </p>
 
 # Dueling DQN
+Instead of computing directly the Q-values, in the dueling architecture we compute the advantage function.
+That is, we decompose `Q(s,a)` as:
+- **V(s)**: the value of being at that state
+- **A(s,a)**: the advantage of taking that action at that state (how much better is to take this action versus all other possible actions at that state).
+
+<p align="center">
+    <img src="./figures/q_values-decomposition" width="500px" height="150px"/>
+    <br />
+    <a name="eq-deep_q_learning_update"> Eq. 2: Q-values decomposition</a>
+</p>
+
