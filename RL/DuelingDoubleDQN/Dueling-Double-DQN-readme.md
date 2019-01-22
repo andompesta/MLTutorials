@@ -25,7 +25,7 @@ That is, we decompose `Q(s,a)` as:
 - **A(s,a)**: the advantage of taking that action at that state (how much better is to take this action versus all other possible actions at that state).
 
 <p align="center">
-    <img src="./figures/q_values-decomposition.png" width="500px" height="150px"/>
+    <img src="./figures/q_values-decomposition.png" width="450px" height="100px"/>
     <br />
     <a name="eq-deep_q_learning_update"> Eq. 2: Q-values decomposition</a>
 </p>
