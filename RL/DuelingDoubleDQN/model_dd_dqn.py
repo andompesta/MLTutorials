@@ -16,14 +16,18 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
     def policy_fn(observation, steps_done):
         sample = np.random.random()
         eps_threshold = eps_end + (eps_start - eps_end) * math.exp(-1. * steps_done * eps_decay)
-        with torch.no_grad():
-            if sample > eps_threshold:
-                input = observation.unsqueeze(0).to(device)
-                q_values = network.forward(input)[0]
-                best_action = torch.max(q_values, dim=0)[1]
-                return best_action.cpu().item(), eps_threshold
-            else:
-                return np.random.randint(low=0, high=len(actions)), eps_threshold
+        if sample > eps_threshold:
+            with torch.no_grad():
+                if observation.dim() == 3:
+                    observation = observation.unsqueeze(0)
+                elif observation.dim() < 3:
+                    NotImplementedError("Wrong input dim")
+
+                values = network.forward(observation)[0]
+                best_action = torch.max(values, dim=0)[1]
+                return best_action.cpu(), eps_threshold
+        else:
+            return torch.tensor(np.random.randint(low=0, high=len(actions)), dtype=torch.long), eps_threshold
     return policy_fn
 
 
@@ -98,7 +102,7 @@ class DDDQN_Network(nn.Module):
             nn.Linear(in_features=self.fc_size[1],
                       out_features=self.action_space))          # advantage of each action at state s_t
 
-        self._loss = nn.MSELoss(reduction='none')
+        self._loss = nn.SmoothL1Loss(reduction='none')
 
     def reset_parameters(self):
         for p in self.parameters():
@@ -135,11 +139,11 @@ class DDDQN_Network(nn.Module):
         :param actions: an array of action
         :return: 
         """
-        q_values = self.forward(state)
-        q_value = torch.sum(torch.mul(q_values, actions), dim=1)
-        return q_value
+        state_values = self.forward(state)
+        state_action_value = state_values.gather(1, actions)
+        return state_action_value
 
-    def compute_loss(self, q_values, q_target, weights):
+    def compute_loss(self, state_action_values, next_state_values, weights):
         """
         compute the loss between the q-values taken w.r.t the optimal ones
         :param q_values: current estimation of the state-action values obtained following an e-greedy policy
@@ -148,6 +152,6 @@ class DDDQN_Network(nn.Module):
         :return: 
         """
 
-        absolute_error = torch.abs(q_target - q_values)
-        self.loss =  torch.mean(weights * self._loss(q_target, q_values))
-        return self.loss, absolute_error
+        absolute_error = torch.abs(next_state_values - state_action_values)
+        loss = torch.mean(weights * self._loss(next_state_values, state_action_values))
+        return loss, absolute_error

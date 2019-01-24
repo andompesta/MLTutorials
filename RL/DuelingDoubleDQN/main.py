@@ -11,7 +11,7 @@ import torch
 from visdom import Visdom
 from RL.helper import frame_processor
 from os import path
-EXP_NAME = "exp-{}".format(datetime.now())
+EXP_NAME = "exp-dd-dqn"
 
 def __pars_args__():
     parser = argparse.ArgumentParser(description='DD-DQN')
@@ -24,7 +24,7 @@ def __pars_args__():
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
 
-    parser.add_argument("-u_target", "--update_target_estimator_every", default=10,
+    parser.add_argument("-u_target", "--update_target_estimator_every", default=8,
                         help="how ofter update the parameters of the target network")
     parser.add_argument("-ne", "--num_episodes", type=int, default=100, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
@@ -38,7 +38,7 @@ def __pars_args__():
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=100000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=1000,
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=200,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[40, 90], help="Frame size")
@@ -124,14 +124,14 @@ if __name__ == '__main__':
                                                                                             args.replay_memory_init_size))
     vis = Visdom()
 
-    q_network = DDDQN_Network(args.batch_size, len(args.actions), args.number_frames,
+    q_network = DDDQN_Network(args.batch_size, 2, 3,
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
                             fc_size=[384, 128])
     # fc_size=[3200, 512])
 
-    t_network = DDDQN_Network(args.batch_size, len(args.actions), args.number_frames,
+    t_network = DDDQN_Network(args.batch_size, 2, 3,
                             kernels_size=[8, 4, 4],
                             out_channels=[32, 64, 128],
                             strides=[4, 2, 2],
@@ -141,7 +141,8 @@ if __name__ == '__main__':
 
     q_network.to(device)
     t_network.to(device)
-    optimizer = torch.optim.RMSprop(q_network.parameters(), lr=args.learning_rate)
+    t_network.load_state_dict(q_network.state_dict())
+    optimizer = torch.optim.RMSprop(q_network.parameters())
 
     # load previous weights
     # q_network_chk = torch.load(path.join(args.model_path, "exp-2019-01-18 17:10:10.163325", "q_net-679.cptk"))
