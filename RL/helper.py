@@ -11,10 +11,9 @@ import matplotlib.pyplot as plt
 
 use_cuda = torch.cuda.is_available()
 
-Transition = namedtuple("Transition", ["state", "action", "reward", "next_state", "done"])
+Transition = namedtuple("Transition", ["state", "action", "next_state", "reward", "done"])
 
-img_trans = transforms.Compose([transforms.ToPILImage(),
-                                    # transforms.Resize(state_size),
+resize = transforms.Compose([transforms.ToPILImage(),
                                     transforms.Resize(40, interpolation=Image.CUBIC),
                                     transforms.ToTensor()])
 
@@ -23,13 +22,14 @@ def get_cart_location(env, screen_width):
     scale = screen_width / world_width
     return int(env.state[0] * scale + screen_width / 2.0)  # MIDDLE OF CART
 
-def get_screen(env):
+
+def get_screen(env, device):
     # Returned screen requested by gym is 400x600x3, but is sometimes larger
     # such as 800x1200x3. Transpose it into torch order (CHW).
     screen = env.render(mode='rgb_array').transpose((2, 0, 1))
     # Cart is in the lower half, so strip off the top and bottom of the screen
     _, screen_height, screen_width = screen.shape
-    screen = screen[:, int(screen_height*0.4):int(screen_height * 0.8)]
+    screen = screen[:, int(screen_height * 0.4):int(screen_height * 0.8)]
     view_width = int(screen_width * 0.6)
     cart_location = get_cart_location(env, screen_width)
     if cart_location < view_width // 2:
@@ -41,11 +41,13 @@ def get_screen(env):
                             cart_location + view_width // 2)
     # Strip off the edges, so that we have a square image centered on a cart
     screen = screen[:, :, slice_range]
+    # Convert to float, rescale, convert to torch tensor
+    # (this doesn't require a copy)
     screen = np.ascontiguousarray(screen, dtype=np.float32) / 255
     screen = torch.from_numpy(screen)
+    # Resize, and add a batch dimension (BCHW)
+    return frame_processor(screen, resize).unsqueeze(0).to(device)
 
-    screen = frame_processor(screen, (0,0,0,0), img_trans)
-    return screen
 
 class EpisodeStat(object):
     history_rew = deque(maxlen=10)
@@ -59,27 +61,6 @@ class EpisodeStat(object):
         self.avg_length = np.mean(self.history_len)
 
 
-
-
-class ReplayMemory(object):
-
-    def __init__(self, capacity):
-        self.capacity = capacity
-        self.memory = []
-        self.position = 0
-
-    def store(self, args):
-        """Saves a transition."""
-        if len(self.memory) < self.capacity:
-            self.memory.append(None)
-        self.memory[self.position] = args
-        self.position = (self.position + 1) % self.capacity
-
-    def sample(self, batch_size):
-        return (random.sample(self.memory, batch_size))
-
-    def __len__(self):
-        return len(self.memory)
 
 
 class ExperienceBuffer(object):
@@ -156,7 +137,7 @@ def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10,
         return state
     return stack_frame
 
-def frame_processor(frame, crop_size, transformations):
+def frame_processor(frame, transformations, crop_size=None):
     """
     Processes a raw Atari iamges.
     Crop the image according to the offset passed and apply the define transitions.
@@ -172,7 +153,8 @@ def frame_processor(frame, crop_size, transformations):
         # add channel dim
         frame = np.expand_dims(frame, axis=-1)
 
-    frame = img_crop_to_bounding_box(frame, *crop_size)
+    if crop_size:
+        frame = img_crop_to_bounding_box(frame, *crop_size)
     frame = transformations(frame)
 
     # plt.figure()

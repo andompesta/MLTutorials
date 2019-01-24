@@ -1,17 +1,22 @@
 import argparse
-from datetime import datetime
-import vizdoom as vz
 import random                # Handling random number generation
 import time
-from torchvision import transforms
-import numpy as np
-from RL.DQN import train
-from RL.DQN.model_dqn import DQN_Network
 import torch
+import torch.nn.functional as F
+from torchvision import transforms
+from PIL import Image
+import numpy as np
+from RL.DQN.model_dqn import DQN, epsilon_greedy_policy
+
 from visdom import Visdom
 from RL.helper import frame_processor
-from os import path
-EXP_NAME = "exp-{}".format(datetime.now())
+import RL.helper as helper
+import itertools
+import matplotlib.pyplot as plt
+
+EXP_NAME = "exp-dqn"
+GLOBAL_STEP = 0
+P_LOSSES = []
 
 def __pars_args__():
     parser = argparse.ArgumentParser(description='DQN')
@@ -24,9 +29,9 @@ def __pars_args__():
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
 
-    parser.add_argument("-u_target", "--update_target_estimator_every", default=10,
+    parser.add_argument("-u_target", "--update_target_estimator_every", default=8,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=100, help="Number of episodes to run for")
+    parser.add_argument("-ne", "--num_episodes", type=int, default=5000, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
     parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
                         help='possible actions')
@@ -40,12 +45,15 @@ def __pars_args__():
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
     parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=200,
                         help="Number of random experiences to sample when initializing the reply memory")
-    parser.add_argument("--max_steps", type=int, default=5000, help="Max step for an episode")
+    parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[40, 90], help="Frame size")
     parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
     parser.add_argument("-v", "--version", type=str, default="v-0", help="Use cuda")
 
     return parser.parse_args()
+
+
+
 
 def create_enviroment():
     # env = vz.DoomGame()
@@ -60,7 +68,6 @@ def create_enviroment():
     return env
 
 def test_environment(args):
-    import matplotlib.pyplot as plt
     game = create_enviroment()
 
     crop = (50, 10, 30, 30)
@@ -94,48 +101,153 @@ def test_environment(args):
 
 
 if __name__ == '__main__':
+
+
+    p_rewards = []
+
+
     args = __pars_args__()
     # test_environment(args)
     env = create_enviroment()
     device = torch.device("cuda:0" if args.use_cuda else "cpu")
 
-    print("record_video_every:{}\treplay_memory_size:{}\treplay_memory_init_size:{}".format(args.record_video_every,
-                                                                                            args.replay_memory_size,
-                                                                                            args.replay_memory_init_size))
+    img_trans = transforms.Compose([transforms.ToPILImage(),
+                                    # transforms.Resize(state_size),
+                                    transforms.Resize(40, interpolation=Image.CUBIC),
+                                    transforms.ToTensor()])
+
     vis = Visdom()
-
-    q_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
-                            kernels_size=[8, 4, 4],
-                            out_channels=[32, 64, 128],
-                            strides=[4, 2, 2],
-                            fc_size=[384, 128])
-                            # fc_size=[3200, 512])
-
-    t_network = DQN_Network(args.batch_size, len(args.actions), args.number_frames,
-                            kernels_size=[8, 4, 4],
-                            out_channels=[32, 64, 128],
-                            strides=[4, 2, 2],
-                            fc_size=[384, 128])
-                            # fc_size=[3200, 512])
-
+    q_network = DQN()
+    t_network = DQN()
 
     q_network.to(device)
     t_network.to(device)
-    optimizer = torch.optim.RMSprop(q_network.parameters(), lr=args.learning_rate)
 
-    # load previous weights
-    # q_network_chk = torch.load(path.join(args.model_path, "exp-2019-01-18 17:10:10.163325", "q_net-679.cptk"))
-    # q_network.load_state_dict(q_network_chk['state_dict'])
-    # optimizer.load_state_dict(q_network_chk['optimizer'])
-    #
-    # t_network_chk = torch.load(path.join(args.model_path, "exp-2019-01-18 17:10:10.163325", "t_net-679.cptk"))
-    # t_network.load_state_dict(t_network_chk["state_dict"])
-
-    q_network.train()
+    optimizer = torch.optim.RMSprop(q_network.parameters())
     t_network.eval()
 
-    for t, stats in train.work(env, q_network, t_network, args, vis, EXP_NAME,
-                               optimizer, device):
-        print("\nEpisode Reward: {}".format(stats.episode_reward))
+    replay_memory = helper.ExperienceBuffer(args.replay_memory_size)
 
+
+
+    def optimize_model():
+        if len(replay_memory.buffer) < args.batch_size:
+            return
+        global P_LOSSES
+        global GLOBAL_STEP
+
+        batch = replay_memory.sample(args.batch_size)
+        state_batch, action_batch, next_state_batch, reward_batch, done_batch = zip(*batch)
+
+
+        state_batch = torch.cat(state_batch).to(device)
+        action_batch = torch.tensor(action_batch).long().to(device)
+        reward_batch = torch.tensor(reward_batch).to(device)
+        done_batch = torch.tensor(done_batch).to(device)
+        next_state_batch = torch.cat(next_state_batch).to(device)
+
+
+        with torch.no_grad():
+            non_final_mask = (1 - done_batch).byte().to(device)
+            non_final_next_states = next_state_batch[non_final_mask]
+
+            next_state_values = torch.zeros(args.batch_size, device=device)
+            next_state_values[non_final_mask] = t_network(non_final_next_states).max(1)[0]
+            # Compute the expected Q values
+            expected_state_action_values = (next_state_values * args.discount_factor) + reward_batch
+
+        state_action_values = q_network(state_batch).gather(1, action_batch.unsqueeze(1))
+
+        # Compute Huber loss
+        loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+
+        P_LOSSES.append([loss.item(), state_action_values.max().item()])
+        # Optimize the model
+        optimizer.zero_grad()
+        loss.backward()
+        torch.nn.utils.clip_grad_value_(q_network.parameters(), args.max_grad)
+        optimizer.step()
+        assert t_network.head.bias.grad == None
+        assert expected_state_action_values.grad_fn == None
+        GLOBAL_STEP += 1
+
+
+    print("record_video_every:{}\treplay_memory_size:{}\treplay_memory_init_size:{}".format(args.record_video_every,
+                                                                                            args.replay_memory_size,
+                                                                                            args.replay_memory_init_size))
+
+
+
+    policy = epsilon_greedy_policy(q_network,
+                                   args.epsilon_end,
+                                   args.epsilon_start,
+                                   args.epsilon_decay_rate,
+                                   args.actions, device)
+
+    for i_episode in range(args.num_episodes):
+        env.reset()
+        last_screen = helper.get_screen(env, device)
+        current_screen = helper.get_screen(env, device)
+        state = current_screen - last_screen
+        assert state.sum() == 0
+
+        # One step in the environment
+        for t in itertools.count():
+            # Print out which step we're on, useful for debugging.
+            print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
+
+            action, epsilon = policy(state, GLOBAL_STEP)
+            _, reward, done, _ = env.step(action.item())
+            reward = torch.tensor([reward], device=device)
+
+            # Observe new state
+            last_screen = current_screen
+            current_screen = helper.get_screen(env, device)
+            if not done:
+                next_state = current_screen - last_screen
+            else:
+                next_state = torch.zeros([1, 3, 40, 90]).to(device)
+
+            transition = helper.Transition(state, action, next_state, reward, int(done))
+            replay_memory.store(transition)
+            # Move to the next state
+            state = next_state
+
+            optimize_model()
+
+            if (t == args.max_steps) or done:
+                stat = helper.EpisodeStat(t + 1, t + 1)
+                print('Episode: {}'.format(i_episode),
+                      'Episode length: {}'.format(stat.episode_length),
+                      'Episode reward: {}'.format(stat.episode_reward),
+                      'Avg reward: {}'.format(stat.avg_reward))
+                break
+
+        if len(P_LOSSES) > 0:
+            vis.line(Y=np.array(P_LOSSES),
+                     X=np.repeat(np.expand_dims(np.arange(len(P_LOSSES)), 1), 2, axis=1),
+                     opts=dict(legend=["loss", "max_q_value"],
+                               title="q_network",
+                               showlegend=True),
+                     win="plane_q_network_{}".format(EXP_NAME))
+
+        # Update params
+        if i_episode % args.update_target_estimator_every == 0:
+            t_network.load_state_dict(q_network.state_dict())
+            t_network.eval()
+            print("\nCopied model parameters to target network.")
+            for t_param, q_param in zip(t_network.state_dict().items(), q_network.state_dict().items()):
+                if not torch.equal(t_param[1], q_param[1]):
+                    print("Error : {}\t{}".format(t_param[0], q_param[0]))
+                    break
+
+
+        p_rewards.append([stat.episode_reward, stat.episode_length, stat.avg_reward])
+        vis.line(Y=np.array(p_rewards),
+                 X=np.repeat(np.expand_dims(np.arange(i_episode + 1), 1), 3, axis=1),
+                 opts=dict(legend=["episode_reward", "episode_length", "average_reward"],
+                           title="rewards",
+                           showlegend=True),
+                 win="plane_reward_{}".format(EXP_NAME))
+        
     env.close()
