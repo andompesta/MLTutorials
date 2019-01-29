@@ -7,15 +7,25 @@ from RL.DuelingDoubleDQN.model_dd_dqn import epsilon_greedy_policy
 import RL.helper as helper
 from collections import deque
 import random
+from torchvision import transforms as T
+
 
 
 if "../" not in sys.path:
   sys.path.append("../")
 
 GLOBAL_STEP = 0
-PRIORITY_ALPHA=0.6
-PRIORITY_BETA_START=0.4
+PRIORITY_ALPHA = 0.6
+PRIORITY_BETA_START = 0.4
 PRIORITY_BETA_FRAMES = 100000
+RESET_FRAME = torch.zeros([1, 4, 84, 84])
+# RESET_FRAME = torch.zeros([1, 4, 34, 136])
+ACTION_MAP = {
+    0: [1, 0, 0],
+    1: [0, 1, 0],
+    2: [0, 0, 1]
+}
+
 
 def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     """
@@ -30,7 +40,20 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     :return: 
     """
     global GLOBAL_STEP
-    RESET_FRAME = torch.zeros([1, 3] + args.state_size)
+    global PRIORITY_BETA_FRAMES
+    global PRIORITY_BETA_START
+    global PRIORITY_ALPHA
+    global RESET_FRAME
+
+    IMG_TRANS = T.Compose([T.ToPILImage(),
+                           T.CenterCrop([170, 200]),
+                           T.Resize(args.state_size),
+                           T.Grayscale(),
+                           T.ToTensor()])
+
+    # IMG_TRANS = T.Compose([T.Resize(args.state_size),
+    #                        T.Grayscale(),
+    #                        T.ToTensor()])
 
     torch.manual_seed(args.seed)
 
@@ -44,18 +67,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     helper.ensure_dir(summary_path)
     helper.ensure_dir(video_path)
 
-    # stack_frame_fn = helper.stack_frame_setup(args.state_size,
-    #                                           top_offset_height=50,
-    #                                           bottom_offset_height=10,
-    #                                           left_offset_width=30,
-    #                                           right_offset_width=30
-    #                                           )
 
-
-    if optimizer is None:
-        optimizer = torch.optim.Adagrad(q_network.parameters(), lr=args.learning_rate)
+    stack_frame_fn = helper.stack_frame_setup(IMG_TRANS)
 
     # Keeps track of useful statistics
+    # replay_memory = helper.ExperienceBuffer(args.replay_memory_size)
     replay_memory = helper.PrioritizedReplayMemory(capacity=args.replay_memory_size,
                                                    alpha=PRIORITY_ALPHA,
                                                    beta_start=PRIORITY_BETA_START,
@@ -67,48 +83,37 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                                    args.epsilon_end,
                                    args.epsilon_start,
                                    args.epsilon_decay_rate,
-                                   args.actions, device)
+                                   args.actions,
+                                   device)
 
-    stacked_frames = deque([torch.zeros(args.state_size) for i in range(args.number_frames)], maxlen=args.number_frames)
+    frames_queue = deque(maxlen=args.number_frames)
 
     print("Populating replay memory...")
+    env.new_episode()
+    # frame = env.render()
+    frame = env.get_state().screen_buffer
 
-    # env.new_episode()
-    # frame = env.get_state().screen_buffer
-    env.reset()
-    last_screen = helper.get_screen(env, device)
-    current_screen = helper.get_screen(env, device)
-
-    # state = stack_frame_fn(stacked_frames, frame, True)
-    state = current_screen - last_screen
+    state = stack_frame_fn(frames_queue, frame, True)
     for i in range(args.replay_memory_init_size):
-        # action = random.choice(args.actions)
-        # reward = env.make_action(action)
-        # done = env.is_episode_finished()
 
-        action, epsilon = policy(state, GLOBAL_STEP)
-        _, reward, done, _ = env.step(action.item())
-
+        action = random.choice(args.actions)
+        reward = env.make_action(ACTION_MAP[action])
+        done = env.is_episode_finished()
 
         if done:
             transition = helper.Transition(state, action, RESET_FRAME, reward, int(done))
             replay_memory.store(transition)
 
             # start new episode
-            # env.new_episode()
-            # frame = env.get_state().screen_buffer
-            env.reset()
-            last_screen = current_screen
-            current_screen = helper.get_screen(env, device)
-            state = current_screen - last_screen
+            env.new_episode()
+
+            frame = env.get_state().screen_buffer
+            # frame = env.render()
+            state = stack_frame_fn(frames_queue, frame, True)
         else:
-            # frame = env.get_state().screen_buffer
-            # next_state = stack_frame_fn(stacked_frames, frame)
-
-            last_screen = current_screen
-            current_screen = helper.get_screen(env, device)
-            next_state = current_screen - last_screen
-
+            frame = env.get_state().screen_buffer
+            # frame = env.render()
+            next_state = stack_frame_fn(frames_queue, frame)
 
             transition = helper.Transition(state, action, next_state, reward, int(done))
             replay_memory.store(transition)
@@ -117,16 +122,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     print("start training")
     for i_episode in range(args.num_episodes):
 
-        # Update params
-        if i_episode % args.update_target_estimator_every == 0:
-            t_network.load_state_dict(q_network.state_dict())
-            print("\nCopied model parameters to target network.")
-
         if i_episode % 200 == 0:
             # Save the current checkpoint
             helper.save_checkpoint({
                 'episode': i_episode,
-                'state_dict': q_network.cpu().state_dict(),
+                'state_dict': q_network.state_dict(),
                 'optimizer': optimizer.state_dict(),
                 'global_step': GLOBAL_STEP,
             },
@@ -137,52 +137,45 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
             helper.save_checkpoint({
                 'episode': i_episode,
-                'state_dict': t_network.cpu().state_dict(),
+                'state_dict': t_network.state_dict(),
             },
                 path=summary_path,
                 filename='t_net-{}.cptk'.format(i_episode),
                 version=args.version
             )
 
-        # env.new_episode()
-        # frame = env.get_state().screen_buffer
-        env.reset()
-        last_screen = helper.get_screen(env, device)
-        current_screen = helper.get_screen(env, device)
+        env.new_episode()
+        frame = env.get_state().screen_buffer
+        # frame = env.render()
         total_reward = 0
-        state = current_screen - last_screen
+
+        state = stack_frame_fn(frames_queue, frame, True)
+        # total_reward = 0
         # One step in the environment
         for t in itertools.count():
-
             # Print out which step we're on, useful for debugging.
             print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
             sys.stdout.flush()
 
             action, epsilon = policy(state, GLOBAL_STEP)
-            _, reward, done, _ = env.step(action.item())
+            reward = env.make_action(ACTION_MAP[action])
             total_reward += reward
-            # reward = env.make_action(action)
-            # done = env.is_episode_finished()
+            done = env.is_episode_finished()
 
             if done:
                 transition = helper.Transition(state, action, RESET_FRAME, reward, int(done))
                 replay_memory.store(transition)
 
                 # start new episode
-                # env.new_episode()
-                # frame = env.get_state().screen_buffer
-                env.reset()
-                last_screen = current_screen
-                current_screen = helper.get_screen(env, device)
-                state = current_screen - last_screen
+                env.new_episode()
+                frame = env.get_state().screen_buffer
+                # frame = env.render()
+                state = stack_frame_fn(frames_queue, frame, True)
             else:
-                # frame = env.get_state().screen_buffer
-                # next_state = stack_frame_fn(stacked_frames, frame)
+                frame = env.get_state().screen_buffer
+                # frame = env.render()
 
-                last_screen = current_screen
-                current_screen = helper.get_screen(env, device)
-                next_state = current_screen - last_screen
-
+                next_state = stack_frame_fn(frames_queue, frame)
                 transition = helper.Transition(state, action, next_state, reward, int(done))
                 replay_memory.store(transition)
                 state = next_state
@@ -190,8 +183,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
 
             # OPTIMIZE MODEL
             # Sample a minibatch from the replay memory
-            # tree_idx, batch, ISWeights = replay_memory.sample(args.batch_size)
             batch, idx, weights = replay_memory.sample(args.batch_size)
+            # batch = replay_memory.sample(args.batch_size)
             state_batch, action_batch, next_state_batch, reward_batch, done_batch = zip(*batch)
 
             state_batch = torch.cat(state_batch).to(device)
@@ -200,7 +193,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             done_batch = torch.tensor(done_batch).to(device)
             next_state_batch = torch.cat(next_state_batch).to(device)
             weights = torch.tensor(weights).to(device)
-
+            # weights = torch.ones((args.batch_size), device=device)
 
             assert t_network.training == False, "target network is training"
             with torch.no_grad():
@@ -217,11 +210,11 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                 q_value_batch = q_network.compute_q_value(state_batch, action_batch)
 
             # Perform gradient descent update
-            loss, diff = q_network.compute_loss(q_value_batch, next_q_value_batch.unsqueeze(1), weights)
+            loss, td_error, diff = q_network.compute_loss(q_value_batch, next_q_value_batch, weights)
 
-            optimizer.zero_grad()
+            q_network.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_value_(q_network.parameters(), args.max_grad)
+            torch.nn.utils.clip_grad_norm_(q_network.parameters(), args.max_grad)
             optimizer.step()
 
             assert next_q_value_batch.grad_fn == None
@@ -229,16 +222,15 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             # Update priority
             replay_memory.update_priorities(idx, diff.detach().squeeze().cpu().numpy().tolist())
 
-            p_losses.append([loss.item(), q_value_batch.max().item(), next_q_value_batch.max().item(), epsilon])
+            p_losses.append([loss.item(), td_error.item(), q_value_batch.max().item(), next_q_value_batch.max().item(), epsilon])
             GLOBAL_STEP += 1
 
             vis.line(Y=np.array(p_losses),
-                     X=np.repeat(np.expand_dims(np.arange(GLOBAL_STEP), 1), 4, axis=1),
-                     opts=dict(legend=["loss", "max_q_value", "max_next_q_value", "epsilon"],
+                     X=np.repeat(np.expand_dims(np.arange(GLOBAL_STEP), 1), 5, axis=1),
+                     opts=dict(legend=["loss", "td_error", "max_q", "max_n_q", "epsilon"],
                                title="q_network",
                                showlegend=True),
-                     win="plane_q_network_{}".format(exp_name))
-
+                     win="plane_q_network_{}_{}".format(exp_name, args.version))
 
             if (t == args.max_steps) or done:
                 stat = helper.EpisodeStat(t, total_reward)
@@ -251,6 +243,10 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                       'Explore P: {:.4f}'.format(epsilon))
                 break
 
+        # Update params
+        if i_episode % args.update_target_estimator_every == 0:
+            t_network.load_state_dict(q_network.state_dict())
+            print("\nCopied model parameters to target network.")
 
         p_rewards.append([stat.episode_reward, stat.episode_length, stat.avg_reward])
         vis.line(Y=np.array(p_rewards),
@@ -258,7 +254,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                  opts=dict(legend=["episode_reward", "episode_length", "average_reward"],
                            title="rewards",
                            showlegend=True),
-                 win="plane_reward_{}".format(exp_name))
+                 win="plane_reward_{}_".format(exp_name, args.version))
 
         # vis.save(["main"])
         yield GLOBAL_STEP, stat

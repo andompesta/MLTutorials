@@ -98,16 +98,13 @@ class ExperienceBuffer(object):
 
 
 
-def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10, left_offset_width=30, right_offset_width=30):
+def stack_frame_setup(img_trans):
+    # img_trans = transforms.Compose([transforms.ToPILImage(),
+    #                                 transforms.CenterCrop([600, 1200]),
+    #                                 transforms.Resize(state_size),
+    #                                 transforms.Grayscale(),
+    #                                 transforms.ToTensor()])
 
-    crop = (top_offset_height, bottom_offset_height, left_offset_width, right_offset_width)
-
-
-    img_trans = transforms.Compose([transforms.ToPILImage(),
-                                    transforms.Resize(state_size),
-                                    # transforms.Resize(40, interpolation=Image.CUBIC),
-                                    transforms.Grayscale(),
-                                    transforms.ToTensor()])
 
 
     def stack_frame(stacked_frames, frame, is_new_episode=False):
@@ -119,8 +116,8 @@ def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10,
         :return: 
         """
 
-        frame = frame_processor(frame, crop, img_trans)
-        assert len(frame.shape) == 2
+        frame = frame_processor(frame, img_trans)
+        assert frame.dim() == 3
 
         if is_new_episode:
             stacked_frames.clear()
@@ -133,11 +130,17 @@ def stack_frame_setup(state_size, top_offset_height=30, bottom_offset_height=10,
             stacked_frames.append(frame)
 
         # Build the state (first dimension specifies different frames)
-        state = torch.stack(list(stacked_frames), dim=0)
+        state = torch.stack(list(stacked_frames), dim=1)
         return state
     return stack_frame
 
-def frame_processor(frame, transformations, crop_size=None):
+
+def show_image(image_np, idx):
+    plt.figure()
+    plt.imshow(image_np[0, idx].numpy(), cmap="gray")
+    plt.show()
+
+def frame_processor(frame, transformations):
     """
     Processes a raw Atari iamges.
     Crop the image according to the offset passed and apply the define transitions.
@@ -149,18 +152,12 @@ def frame_processor(frame, transformations, crop_size=None):
 
     :return: A processed [84, 84, 1] state representing grayscale values.
     """
-    if len(frame.shape) == 2:
-        # add channel dim
-        frame = np.expand_dims(frame, axis=-1)
+    if type(frame) == np.ndarray:
+        if len(frame.shape) == 2:
+            # add channel dim
+            frame = np.expand_dims(frame, axis=-1)
 
-    if crop_size:
-        frame = img_crop_to_bounding_box(frame, *crop_size)
     frame = transformations(frame)
-
-    # plt.figure()
-    # plt.imshow(frame[0].numpy(), cmap="gray")
-    # plt.show()
-
     return frame
 
 def img_crop_to_bounding_box(img, top_offset_height, bottom_offset_height, left_offset_width, right_offset_width):

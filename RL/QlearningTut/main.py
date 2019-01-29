@@ -14,7 +14,7 @@ from os.path import join as join_path
 
 import imageio
 import numpy as np
-from QlearningTut.maze_env_gif import Maze
+from RL.envs.maze_env_gif import Maze
 
 # from QlearningTut.q_learning import QLearning, TITLE
 from RL.QlearningTut.sarsa import Sarsa, TITLE

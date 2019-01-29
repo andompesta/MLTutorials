@@ -3,7 +3,7 @@ import random                # Handling random number generation
 import time
 import torch
 import torch.nn.functional as F
-from torchvision import transforms
+from torchvision import transforms as T
 from PIL import Image
 import numpy as np
 from RL.DQN.model_dqn import DQN, epsilon_greedy_policy
@@ -13,10 +13,16 @@ from RL.helper import frame_processor
 import RL.helper as helper
 import itertools
 import matplotlib.pyplot as plt
+import gym
+from RL.envs.maze_env_gif import Maze
+from collections import deque
 
 EXP_NAME = "exp-dqn"
 GLOBAL_STEP = 0
 P_LOSSES = []
+RESET_FRAME = torch.zeros([1, 4, 34, 136])
+HISTOGRAM = {0:0, 1:0, 2:0, 3:0}
+
 
 def __pars_args__():
     parser = argparse.ArgumentParser(description='DQN')
@@ -33,9 +39,9 @@ def __pars_args__():
                         help="how ofter update the parameters of the target network")
     parser.add_argument("-ne", "--num_episodes", type=int, default=5000, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
-    parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
+    parser.add_argument('-a', '--actions', type=list, default=[0, 1, 2, 3],
                         help='possible actions')
-    parser.add_argument('-nf', '--number_frames', type=int, default=3, help='number of frame for each state')
+    parser.add_argument('-nf', '--number_frames', type=int, default=4, help='number of frame for each state')
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
     parser.add_argument("-es", "--epsilon_start", type=float, default=0.9, help="starting epsilon")
     parser.add_argument("-ee", "--epsilon_end", type=float, default=0.05, help="ending epsilon")
@@ -43,10 +49,10 @@ def __pars_args__():
                         help="Number of steps to decay epsilon over")
     parser.add_argument("-rv", "--record_video_every", type=int, default=50, help="Record a video every N episodes")
     parser.add_argument("-rm", "--replay_memory_size", type=int, default=10000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=200,
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=500,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
-    parser.add_argument("--state_size", type=list, default=[40, 90], help="Frame size")
+    parser.add_argument("--state_size", type=list, default=[34, 136], help="Frame size")
     parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
     parser.add_argument("-v", "--version", type=str, default="v-0", help="Use cuda")
 
@@ -62,9 +68,11 @@ def create_enviroment():
     # env.set_window_visible(False)
     # env.init()
 
-    import gym
-    env = gym.make('CartPole-v0')
-    env = env.unwrapped
+    env = Maze(height=4, width=8)
+    env.init(True)
+
+    # env = gym.make('CartPole-v0')
+    # env = env.unwrapped
     return env
 
 def test_environment(args):
@@ -100,21 +108,23 @@ def test_environment(args):
 
 
 
-if __name__ == '__main__':
 
+
+if __name__ == '__main__':
+    args = __pars_args__()
+
+    IMG_TRANS = T.Compose([T.Resize(args.state_size),
+                           T.Grayscale(),
+                           T.ToTensor()])
 
     p_rewards = []
 
 
-    args = __pars_args__()
+
     # test_environment(args)
     env = create_enviroment()
     device = torch.device("cuda:0" if args.use_cuda else "cpu")
 
-    img_trans = transforms.Compose([transforms.ToPILImage(),
-                                    # transforms.Resize(state_size),
-                                    transforms.Resize(40, interpolation=Image.CUBIC),
-                                    transforms.ToTensor()])
 
     vis = Visdom()
     q_network = DQN()
@@ -127,13 +137,14 @@ if __name__ == '__main__':
     t_network.eval()
 
     replay_memory = helper.ExperienceBuffer(args.replay_memory_size)
-
+    stack_frame_fn = helper.stack_frame_setup(IMG_TRANS)
+    frames_queue = deque(maxlen=args.number_frames)
 
 
     def optimize_model():
         if len(replay_memory.buffer) < args.batch_size:
             return
-        global P_LOSSES
+
         global GLOBAL_STEP
 
         batch = replay_memory.sample(args.batch_size)
@@ -185,38 +196,55 @@ if __name__ == '__main__':
                                    args.actions, device)
 
     for i_episode in range(args.num_episodes):
-        env.reset()
-        last_screen = helper.get_screen(env, device)
-        current_screen = helper.get_screen(env, device)
-        state = current_screen - last_screen
-        assert state.sum() == 0
+        # env.reset()
+        # last_screen = helper.get_screen(env, device)
+        # current_screen = helper.get_screen(env, device)
+        # state = current_screen - last_screen
+        # assert state.sum() == 0
+
+        env.new_episode()
+        frame = env.render()
+        total_reward = 0
+        state = stack_frame_fn(frames_queue, frame, True)
 
         # One step in the environment
         for t in itertools.count():
             # Print out which step we're on, useful for debugging.
             print("\rStep {} ({}) @ Episode {}".format(t, GLOBAL_STEP, i_episode + 1), end="")
 
-            action, epsilon = policy(state, GLOBAL_STEP)
-            _, reward, done, _ = env.step(action.item())
-            reward = torch.tensor([reward], device=device)
 
             # Observe new state
-            last_screen = current_screen
-            current_screen = helper.get_screen(env, device)
-            if not done:
-                next_state = current_screen - last_screen
-            else:
-                next_state = torch.zeros([1, 3, 40, 90]).to(device)
+            action, epsilon = policy(state, GLOBAL_STEP)
+            HISTOGRAM[action] += 1
+            # _, reward, done, _ = env.step(action.item())
+            # total_reward += reward
+            reward = env.make_action(action)
+            total_reward += reward
+            done = env.is_episode_finished()
 
-            transition = helper.Transition(state, action, next_state, reward, int(done))
-            replay_memory.store(transition)
-            # Move to the next state
-            state = next_state
+            if done:
+                transition = helper.Transition(state, action, RESET_FRAME, reward, int(done))
+                replay_memory.store(transition)
+
+                # start new episode
+                env.new_episode()
+                # frame = env.get_state().screen_buffer
+                frame = env.render()
+                state = stack_frame_fn(frames_queue, frame, True)
+            else:
+                # frame = env.get_state().screen_buffer
+                frame = env.render()
+
+                next_state = stack_frame_fn(frames_queue, frame)
+                transition = helper.Transition(state, action, next_state, reward, int(done))
+                replay_memory.store(transition)
+                state = next_state
+
 
             optimize_model()
 
             if (t == args.max_steps) or done:
-                stat = helper.EpisodeStat(t + 1, t + 1)
+                stat = helper.EpisodeStat(t + 1, total_reward)
                 print('Episode: {}'.format(i_episode),
                       'Episode length: {}'.format(stat.episode_length),
                       'Episode reward: {}'.format(stat.episode_reward),
@@ -230,6 +258,7 @@ if __name__ == '__main__':
                                title="q_network",
                                showlegend=True),
                      win="plane_q_network_{}".format(EXP_NAME))
+            print(HISTOGRAM)
 
         # Update params
         if i_episode % args.update_target_estimator_every == 0:

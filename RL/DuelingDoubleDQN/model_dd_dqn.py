@@ -2,6 +2,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 import math
+import random
+
 EPS_START = 0.9
 EPS_END = 0.05
 EPS_DECAY = 200
@@ -23,11 +25,12 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
                 elif observation.dim() < 3:
                     NotImplementedError("Wrong input dim")
 
-                values = network.forward(observation)[0]
+                values = network.forward(observation.to(device))[0]
                 best_action = torch.max(values, dim=0)[1]
-                return best_action.cpu(), eps_threshold
+                return best_action.cpu().item(), eps_threshold
         else:
-            return torch.tensor(np.random.randint(low=0, high=len(actions)), dtype=torch.long), eps_threshold
+            # return torch.tensor(np.random.randint(low=0, high=num_actions), dtype=torch.long), eps_threshold
+            return random.choice(actions), eps_threshold
     return policy_fn
 
 
@@ -70,37 +73,36 @@ class DDDQN_Network(nn.Module):
 
         self.conv1 = nn.Sequential(nn.Conv2d(in_channels=self.n_frame_input,
                                              out_channels=self.out_channels[0],
-                                             kernel_size=(kernels_size[0], kernels_size[0]),
+                                             kernel_size=kernels_size[0],
                                              stride=self.strides[0]),
-                                   nn.ELU())
+                                   nn.BatchNorm2d(self.out_channels[0]),
+                                   nn.ReLU())
 
         self.conv2 = nn.Sequential(nn.Conv2d(in_channels=self.out_channels[0],
                                              out_channels=self.out_channels[1],
-                                             kernel_size=(kernels_size[1], kernels_size[1]),
+                                             kernel_size=kernels_size[1],
                                              stride=self.strides[1]),
-                                   nn.ELU())
+                                   nn.BatchNorm2d(self.out_channels[1]),
+                                   nn.ReLU())
 
         self.conv3 = nn.Sequential(nn.Conv2d(in_channels=self.out_channels[1],
                                              out_channels=self.out_channels[2],
-                                             kernel_size=(kernels_size[2], kernels_size[2]),
+                                             kernel_size=kernels_size[2],
                                              stride=self.strides[2]),
-                                   nn.ELU())
+                                   nn.BatchNorm2d(self.out_channels[2]),
+                                   nn.ReLU())
 
         self.value_fc = nn.Sequential(nn.Linear(in_features=self.fc_size[0],
-                                           out_features=self.fc_size[1]),
-                                      nn.ELU())
+                                                out_features=self.fc_size[1]),
+                                      nn.ReLU())
+        self.value = nn.Linear(in_features=self.fc_size[1],
+                               out_features=1)                              # value function for given state s_t
 
-        self.value = nn.Sequential(nn.Linear(in_features=self.fc_size[1],
-                                             out_features=1))   # value function for given state s_t
-
-        self.advantage_fc = nn.Sequential(
-            nn.Linear(in_features=self.fc_size[0],
-                      out_features=self.fc_size[1]),
-            nn.ELU()
-        )
-        self.advantage = nn.Sequential(
-            nn.Linear(in_features=self.fc_size[1],
-                      out_features=self.action_space))          # advantage of each action at state s_t
+        self.advantage_fc = nn.Sequential(nn.Linear(in_features=self.fc_size[0],
+                                                    out_features=self.fc_size[1]),
+                                          nn.ReLU())
+        self.advantage = nn.Linear(in_features=self.fc_size[1],
+                                   out_features=self.action_space)          # advantage of each action at state s_t
 
         self._loss = nn.SmoothL1Loss(reduction='none')
 
@@ -117,20 +119,20 @@ class DDDQN_Network(nn.Module):
         :return:
         """
         # Our input are 4 RGB frames of shape 160, 160 each
-        X_conv1 = self.conv1(X)
-        X_conv2 = self.conv2(X_conv1)
-        X_conv3 = self.conv3(X_conv2)
+        X = self.conv1(X)
+        X = self.conv2(X)
+        X = self.conv3(X)
 
-        X_flatten = X_conv3.view(X_conv3.size(0), -1)
-        X_value = self.value_fc(X_flatten)
-        value = self.value(X_value)
+        X_flatten = X.view(X.size(0), -1)
+        value = self.value_fc(X_flatten)
+        value = self.value(value)
 
-        X_advantage = self.advantage_fc(X_flatten)
-        advantage = self.advantage(X_advantage)
+        advantage = self.advantage_fc(X_flatten)
+        advantage = self.advantage(advantage)
 
-        q_values = value + (advantage - torch.mean(advantage, dim=1, keepdim=True))
+        state_value = value + (advantage - torch.mean(advantage, dim=1, keepdim=True))
 
-        return q_values
+        return state_value
 
     def compute_q_value(self, state, actions):
         """
@@ -141,7 +143,7 @@ class DDDQN_Network(nn.Module):
         """
         state_values = self.forward(state)
         state_action_value = state_values.gather(1, actions)
-        return state_action_value
+        return state_action_value.squeeze()
 
     def compute_loss(self, state_action_values, next_state_values, weights):
         """
@@ -153,5 +155,6 @@ class DDDQN_Network(nn.Module):
         """
 
         absolute_error = torch.abs(next_state_values - state_action_values)
-        loss = torch.mean(weights * self._loss(next_state_values, state_action_values))
-        return loss, absolute_error
+        td_error = self._loss(next_state_values, state_action_values)
+        loss = torch.mean(weights * td_error)
+        return loss, td_error.mean(), absolute_error

@@ -1,22 +1,15 @@
 import argparse
-from datetime import datetime
 import vizdoom as vz
-from  RL.envs.maze_env_gif import Maze
-import random                # Handling random number generation
-import time
-from torchvision import transforms
-import numpy as np
-from RL.DuelingDoubleDQN.train import work
-from RL.DuelingDoubleDQN.model_dd_dqn import DDDQN_Network
 import torch
 from visdom import Visdom
-from RL.helper import frame_processor
 from os import path
+from RL.DuelingDoubleDQN.train import work
+from RL.DuelingDoubleDQN.model_dd_dqn import DDDQN_Network
 
-EXP_NAME = "exp-dd-dqn"
+EXP_NAME = "exp-dd-dqn1"
 
 def __pars_args__():
-    parser = argparse.ArgumentParser(description='DD-DQN')
+    parser = argparse.ArgumentParser(description='DD-DQN-main')
 
     parser.add_argument('--max_grad', type=float, default=30, help='value loss coefficient (default: 100)')
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
@@ -54,100 +47,16 @@ def __pars_args__():
 
 def create_enviroment(args):
     env = vz.DoomGame()
-    env.load_config(path.join("..", "doom_setup", "doom_config.cfg"))
-    env.set_doom_scenario_path(path.join("..", "doom_setup", "basic.wad"))
+    env.load_config(path.join("./", "RL", "doom_setup", "doom_config.cfg"))
+    env.set_doom_scenario_path(path.join("RL", "doom_setup", "basic.wad"))
     env.set_window_visible(args.show_window)
     env.init()
-
-    # env = Maze(height=4, width=8)
-    # env.init(True)
-
-    # import gym
-    # env = gym.make('CartPole-v0')
-    # env = env.unwrapped
     return env
-
-def test_environment(args):
-    import matplotlib.pyplot as plt
-    import itertools
-    env = create_enviroment(args)
-
-    img_trans = transforms.Compose([transforms.ToPILImage(),
-                                    transforms.CenterCrop([170, 200]),
-                                    transforms.Resize(args.state_size),
-                                    transforms.Grayscale(),
-                                    transforms.ToTensor()])
-
-    # img_trans = transforms.Compose([transforms.Resize(args.state_size),
-    #                                 transforms.Grayscale(),
-    #                                 transforms.ToTensor()])
-
-    episodes = 10
-    for i in range(episodes):
-        env.new_episode()
-        # env.reset()
-
-        for t in itertools.count():
-            frame = env.get_state().screen_buffer
-            # frame = env.render()
-            # frame = np.expand_dims(frame, axis=-1)
-            frame = frame_processor(frame, img_trans)
-
-
-            # action = np.random.choice(args.actions)
-            # reward = env.make_action(action)
-
-            plt.figure()
-            plt.imshow(frame[0, :, :].numpy(), cmap="gray")
-            plt.show()
-
-            action = random.choice(args.actions)
-            reward = env.make_action(action)
-
-            print(action)
-            print("\treward:", reward)
-            time.sleep(0.02)
-
-            done = env.is_episode_finished()
-            # frame = env.render(mode='rgb_array')
-            # action = env.action_space.sample()
-            # _, reward, done, _ = env.step(action)
-            # print(action, reward)
-            #
-            # frame = frame_processor(frame, img_trans)
-            #
-            # plt.figure()
-            # plt.imshow(frame[0, :, :].numpy(), cmap='gray')
-            # plt.show()
-
-
-            if done:
-                break
-
-        # while not done:
-        #     state = game.get_state()
-        #     frame = np.expand_dims(state.screen_buffer, axis=-1)
-        #     misc = state.game_variables
-        #     frame = frame_processor(frame, crop, img_trans)
-        #
-        #     plt.figure()
-        #     plt.imshow(frame[:,:, 0].numpy())
-        #     plt.show()
-        #
-        #
-        #     print(action)
-        #     reward = game.make_action(action)
-        #     print("\treward:", reward)
-        #     time.sleep(0.02)
-        # print("Result:", game.get_total_reward())
-        time.sleep(2)
-    env.close()
-
 
 
 
 def run(args, env, device):
-    vis = Visdom()
+    vis = Visdom(use_incoming_socket=False)
 
     q_network = DDDQN_Network(args.batch_size, len(args.actions), args.number_frames,
                               kernels_size=[8, 4, 4],

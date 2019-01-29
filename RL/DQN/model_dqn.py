@@ -27,9 +27,9 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
 
                 q_values = network.forward(observation)[0]
                 best_action = torch.max(q_values, dim=0)[1]
-                return best_action.cpu(), eps_threshold
+                return best_action.cpu().item(), eps_threshold
         else:
-            return torch.tensor(np.random.randint(low=0, high=len(actions)), dtype=torch.long), eps_threshold
+            return np.random.randint(low=0, high=len(actions)), eps_threshold
     return policy_fn
 
 
@@ -37,7 +37,7 @@ class DQN(nn.Module):
 
     def __init__(self):
         super(DQN, self).__init__()
-        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
+        self.conv1 = nn.Conv2d(4, 16, kernel_size=5, stride=2)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
         self.bn2 = nn.BatchNorm2d(32)
@@ -47,7 +47,7 @@ class DQN(nn.Module):
         # Number of Linear input connections depends on output of conv2d layers
         # and therefore the input image size, so compute it.
 
-        self.head = nn.Linear(512, 2) # 448 or 512
+        self.head = nn.Linear(448, 4) # 448 or 512
 
     # Called with either one element to determine next action, or a batch
     # during optimization. Returns tensor([[left0exp,right0exp]...]).

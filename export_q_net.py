@@ -1,21 +1,22 @@
 import torch
 from os import path
-from RL.DQN.model_dqn import DQN_Network
+from RL.DuelingDoubleDQN.model_dd_dqn import DDDQN_Network
 
-model_path = path.join("RL", "DQN", "model")
-q_network_chk = torch.load(path.join(model_path, "exp-2019-01-18 17:10:10.163325", "v-0", "q_net-679.cptk"))
+model_path = path.join("model", "exp-dd-dqn1", "v-doom")
+q_network_chk = torch.load(path.join(model_path, "q_net-800.cptk"))
 
 
-actions = [[1, 0, 0], [0, 1, 0], [0, 0, 1]]
+actions = [0, 1, 2]
 number_frames = 4
-batch_size = 518
+batch_size = 128
 device = torch.device("cuda:0")
 
-q_network = DQN_Network(batch_size, len(actions), number_frames,
-                            kernels_size=[8, 4, 4],
-                            out_channels=[32, 64, 128],
-                            strides=[4, 2, 2],
-                            fc_size=[3200, 512])
+q_network = DDDQN_Network(batch_size, len(actions), number_frames,
+                              kernels_size=[8, 4, 4],
+                              out_channels=[32, 64, 64],
+                              strides=[2, 2, 2],
+                              # fc_size=[3584, 512])
+                              fc_size=[4096, 512])
 q_network.to(device)
 q_network.load_state_dict(q_network_chk['state_dict'])
 device = torch.device("cpu")
