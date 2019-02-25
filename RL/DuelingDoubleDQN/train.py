@@ -18,13 +18,7 @@ GLOBAL_STEP = 0
 PRIORITY_ALPHA = 0.6
 PRIORITY_BETA_START = 0.4
 PRIORITY_BETA_FRAMES = 100000
-RESET_FRAME = torch.zeros([1, 4, 84, 84])
-# RESET_FRAME = torch.zeros([1, 4, 34, 136])
-ACTION_MAP = {
-    0: [1, 0, 0],
-    1: [0, 1, 0],
-    2: [0, 0, 1]
-}
+
 
 
 def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
@@ -43,17 +37,15 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     global PRIORITY_BETA_FRAMES
     global PRIORITY_BETA_START
     global PRIORITY_ALPHA
-    global RESET_FRAME
 
     IMG_TRANS = T.Compose([T.ToPILImage(),
-                           T.CenterCrop([170, 200]),
+                           T.CenterCrop([170, 280]),
                            T.Resize(args.state_size),
                            T.Grayscale(),
                            T.ToTensor()])
 
-    # IMG_TRANS = T.Compose([T.Resize(args.state_size),
-    #                        T.Grayscale(),
-    #                        T.ToTensor()])
+    ACTION_MAP = np.identity(len(args.actions), dtype=int).tolist()
+    RESET_FRAME = torch.zeros([1, args.number_frames, args.state_size[0], args.state_size[1]])
 
     torch.manual_seed(args.seed)
 
@@ -89,30 +81,22 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     frames_queue = deque(maxlen=args.number_frames)
 
     print("Populating replay memory...")
-    env.new_episode()
-    # frame = env.render()
-    frame = env.get_state().screen_buffer
+    frame = env.reset()
 
     state = stack_frame_fn(frames_queue, frame, True)
     for i in range(args.replay_memory_init_size):
 
         action = random.choice(args.actions)
-        reward = env.make_action(ACTION_MAP[action])
-        done = env.is_episode_finished()
+        frame, reward, done, info = env.step(ACTION_MAP[action])
 
         if done:
             transition = helper.Transition(state, action, RESET_FRAME, reward, int(done))
             replay_memory.store(transition)
 
             # start new episode
-            env.new_episode()
-
-            frame = env.get_state().screen_buffer
-            # frame = env.render()
+            frame = env.reset()
             state = stack_frame_fn(frames_queue, frame, True)
         else:
-            frame = env.get_state().screen_buffer
-            # frame = env.render()
             next_state = stack_frame_fn(frames_queue, frame)
 
             transition = helper.Transition(state, action, next_state, reward, int(done))
@@ -131,7 +115,8 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                 'global_step': GLOBAL_STEP,
             },
                 path=summary_path,
-                filename='q_net-{}.cptk'.format(i_episode),
+                # filename='q_net-{}.cptk'.format(i_episode)
+                filename='q_net.cptk',
                 version=args.version
             )
 
@@ -140,17 +125,15 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
                 'state_dict': t_network.state_dict(),
             },
                 path=summary_path,
-                filename='t_net-{}.cptk'.format(i_episode),
+                # filename='t_net-{}.cptk'.format(i_episode),
+                filename='t_net.cptk',
                 version=args.version
             )
 
-        env.new_episode()
-        frame = env.get_state().screen_buffer
-        # frame = env.render()
+        frame = env.reset()
         total_reward = 0
 
         state = stack_frame_fn(frames_queue, frame, True)
-        # total_reward = 0
         # One step in the environment
         for t in itertools.count():
             # Print out which step we're on, useful for debugging.
@@ -158,23 +141,13 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             sys.stdout.flush()
 
             action, epsilon = policy(state, GLOBAL_STEP)
-            reward = env.make_action(ACTION_MAP[action])
+            frame, reward, done, info = env.step(ACTION_MAP[action])
             total_reward += reward
-            done = env.is_episode_finished()
 
             if done:
                 transition = helper.Transition(state, action, RESET_FRAME, reward, int(done))
                 replay_memory.store(transition)
-
-                # start new episode
-                env.new_episode()
-                frame = env.get_state().screen_buffer
-                # frame = env.render()
-                state = stack_frame_fn(frames_queue, frame, True)
             else:
-                frame = env.get_state().screen_buffer
-                # frame = env.render()
-
                 next_state = stack_frame_fn(frames_queue, frame)
                 transition = helper.Transition(state, action, next_state, reward, int(done))
                 replay_memory.store(transition)
@@ -192,7 +165,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             reward_batch = torch.tensor(reward_batch).to(device)
             done_batch = torch.tensor(done_batch).to(device)
             next_state_batch = torch.cat(next_state_batch).to(device)
-            weights = torch.tensor(weights).to(device)
+            weights = torch.tensor(weights, dtype=torch.float32).float().to(device)
             # weights = torch.ones((args.batch_size), device=device)
 
             assert t_network.training == False, "target network is training"

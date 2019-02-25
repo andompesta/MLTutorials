@@ -26,7 +26,7 @@ def __pars_args__():
                         help="how ofter update the parameters of the target network")
     parser.add_argument("-ne", "--num_episodes", type=int, default=100, help="Number of episodes to run for")
     # parser.add_argument('-a', '--actions', type=list, default=[[1, 0, 0], [0, 1, 0], [0, 0, 1]], help='possible actions')
-    parser.add_argument('-a', '--actions', type=list, default=[[1, 0], [0, 1]],
+    parser.add_argument('-a', '--actions', type=list, default=[0, 1, 2, 3, 4, 5, 6],
                         help='possible actions')
     parser.add_argument('-nf', '--number_frames', type=int, default=3, help='number of frame for each state')
     parser.add_argument('-ds', '--discount_factor', type=float, default=0.99, help='Reward discount factor')
@@ -46,15 +46,15 @@ def __pars_args__():
     return parser.parse_args()
 
 def create_enviroment():
-    # env = vz.DoomGame()
-    # env.load_config(path.join("../", "doom_setup", "doom_config.cfg"))
-    # env.set_doom_scenario_path(path.join("../", "doom_setup", "basic.wad"))
-    # env.set_window_visible(False)
-    # env.init()
+    env = vz.DoomGame()
+    env.load_config(path.join("../", "doom_setup", "doom_basic.cfg"))
+    env.set_doom_scenario_path(path.join("../", "doom_setup", "basic.wad"))
+    env.set_window_visible(False)
+    env.init()
 
-    import gym
-    env = gym.make('CartPole-v0')
-    env = env.unwrapped
+    # import gym
+    # env = gym.make('CartPole-v0')
+    # env = env.unwrapped
     return env
 
 def test_environment(args):

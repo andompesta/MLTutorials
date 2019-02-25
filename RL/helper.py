@@ -61,6 +61,26 @@ class EpisodeStat(object):
         self.avg_length = np.mean(self.history_len)
 
 
+class RolloutStorage(object):
+    def __init__(self, num_steps, num_processes, obs_shape, action_space, recurrent_hidden_state_size, device=torch.device("cpu")):
+        self.obs = torch.zeros((num_steps + 1, num_processes, *obs_shape), device=device)
+        self.recurrent_hidden_states = torch.zeros((num_steps + 1, num_processes, recurrent_hidden_state_size), device=device)
+        self.rewards = torch.zeros((num_steps, num_processes, 1), device=device)
+        self.value_preds = torch.zeros((num_steps + 1, num_processes, 1), device=device)
+        self.returns = torch.zeros((num_steps + 1, num_processes, 1), device=device)
+        self.action_log_probs = torch.zeros(num_steps, num_processes, 1)
+        if action_space.__class__.__name__ == 'Discrete':
+            action_shape = 1
+        else:
+            action_shape = action_space.shape[0]
+        self.actions = torch.zeros(num_steps, num_processes, action_shape)
+        if action_space.__class__.__name__ == 'Discrete':
+            self.actions = self.actions.long()
+        self.masks = torch.ones(num_steps + 1, num_processes, 1)
+
+        self.num_steps = num_steps
+        self.step = 0
+
 
 
 class ExperienceBuffer(object):
@@ -80,19 +100,6 @@ class ExperienceBuffer(object):
 
     def sample(self, size):
         samples = (random.sample(self.buffer, size))
-
-        # state_batch, action_batch, reward_batch, next_state_batch, done_batch = zip(*samples)
-        #
-        # state_batch = torch.stack(state_batch)
-        # action_batch = torch.FloatTensor(list(action_batch))
-        # reward_batch = torch.FloatTensor(reward_batch)
-        # try:
-        #     next_state_batch = torch.stack(next_state_batch).type(torch.FloatTensor)
-        # except Exception as e:
-        #     print(next_state_batch)
-        #     raise e
-        # done_batch = torch.FloatTensor(done_batch)
-
         return samples
 
 

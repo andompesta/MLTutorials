@@ -51,7 +51,7 @@ def __pars_args__():
 
 def create_enviroment():
     game = vz.DoomGame()
-    game.load_config(path.join("doom_setup", "doom_config.cfg"))
+    game.load_config(path.join("doom_setup", "doom_basic.cfg"))
     game.set_doom_scenario_path(path.join("doom_setup", "basic.wad"))
     game.init()
     return game
