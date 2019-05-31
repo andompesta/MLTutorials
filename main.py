@@ -23,9 +23,9 @@ def __pars_args__():
     parser.add_argument('-m_path', '--model_path', default='./model', help='Path to save the model')
     parser.add_argument('-v_path', '--monitor_path', default='./video', help='Path to save videos of agent')
 
-    parser.add_argument("-u_target", "--update_target_estimator_every", default=20,
+    parser.add_argument("-u_target", "--update_target_estimator_every", default=100,
                         help="how ofter update the parameters of the target network")
-    parser.add_argument("-ne", "--num_episodes", type=int, default=5000, help="Number of episodes to run for")
+    parser.add_argument("-ne", "--num_episodes", type=int, default=10000, help="Number of episodes to run for")
     parser.add_argument('-a', '--actions', type=list, default=[0, 1, 2, 3, 4, 5, 6],
                         help='possible actions')
 
@@ -35,8 +35,8 @@ def __pars_args__():
     parser.add_argument("-ee", "--epsilon_end", type=float, default=0.01, help="ending epsilon")
     parser.add_argument("-ed", "--epsilon_decay_rate", type=float, default=0.0005,
                         help="Number of steps to decay epsilon over")
-    parser.add_argument("-rm", "--replay_memory_size", type=int, default=1000000, help="Size of the replay memory")
-    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=100000,
+    parser.add_argument("-rm", "--replay_memory_size", type=int, default=100000, help="Size of the replay memory")
+    parser.add_argument("-rm_init", "--replay_memory_init_size", type=int, default=90000,
                         help="Number of random experiences to sample when initializing the reply memory")
     parser.add_argument("--max_steps", type=int, default=5000, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[80, 100], help="Frame size")
@@ -116,12 +116,12 @@ def run(args, env, device):
     optimizer = torch.optim.RMSprop(q_network.parameters(), lr=args.learning_rate)
 
     # load previous weights
-    # q_network_chk = torch.load(path.join(args.model_path, "exp-2019-01-18 17:10:10.163325", "q_net-679.cptk"))
-    # q_network.load_state_dict(q_network_chk['state_dict'])
-    # optimizer.load_state_dict(q_network_chk['optimizer'])
-    #
-    # t_network_chk = torch.load(path.join(args.model_path, "exp-2019-01-18 17:10:10.163325", "t_net-679.cptk"))
-    # t_network.load_state_dict(t_network_chk["state_dict"])
+    q_network_chk = torch.load(path.join(args.model_path, EXP_NAME, args.version, "q_net.cptk"))
+    q_network.load_state_dict(q_network_chk['state_dict'])
+    optimizer.load_state_dict(q_network_chk['optimizer'])
+
+    t_network_chk = torch.load(path.join(args.model_path, EXP_NAME, args.version, "t_net.cptk"))
+    t_network.load_state_dict(t_network_chk["state_dict"])
 
     for t, stats in work(env, q_network, t_network, args, vis, EXP_NAME, optimizer, device):
         print("\nEpisode Reward: {}".format(stats.episode_reward))

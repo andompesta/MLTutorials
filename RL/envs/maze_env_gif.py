@@ -16,6 +16,7 @@ import time
 import sys
 from PIL import Image, ImageDraw, ImageFont
 import torchvision.transforms as T
+from gym import error, spaces, utils, Env
 
 UNIT = 40  # pixels
 DISCOUNT_BAD_ACTION = -0.1
@@ -25,21 +26,47 @@ HOLES_REWARD = -10.
 
 class EnvObj(object):
     def __init__(self, coords, reward, name):
+        # self.observation_space = spaces.Box(0, 255, [240, 320], dtype=np.float32)
+        #
+        # self.game_path = game_path
+        # self.is_visible = is_visible
+        # self.env = self.create_enviroment(game_path, is_visible)
+        # self.seed(1)
+
         self.x = coords[0]
         self.y = coords[1]
         self.reward = reward
         self.name = name
 
 
-class Maze(object):
-    def __init__(self, height=4, width=4):
+class Maze(Env):
+    def __init__(self, game_path, height=4, width=4, num_actions=4, is_visible=True):
         self.maze_h = height
         self.maze_w = width
         # self.action_space = [[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]] #['u', 'd', 'l', 'r']
-        self.action_space = ['u', 'd', 'l', 'r']
-        self.n_actions = len(self.action_space)
+        self.action_space = spaces.Discrete(num_actions)
+        self.observation_space = spaces.Box(0, height, [width, height], dtype=np.float32)
+        self.is_visible = is_visible
+        self.game_path = game_path
+
+        self.env = self.create_enviroment(game_path, is_visible)
+
+        # self.action_space = ['u', 'd', 'l', 'r']
+        self.n_actions = num_actions
+
+
         self.obj = {}
         self.done = False
+
+    def create_enviroment(self, game_path, is_visible):
+        env = vz.DoomGame()
+        env.load_config("{}.cfg".format(game_path))
+        env.set_doom_scenario_path("{}.wad".format(game_path))
+        env.set_window_visible(is_visible)
+        env.init()
+        self.is_init = True
+        return env
+
 
     def init(self, random):
         '''

@@ -33,22 +33,6 @@ def epsilon_greedy_policy(network, eps_end, eps_start, eps_decay, actions, devic
             return random.choice(actions), eps_threshold
     return policy_fn
 
-
-# def epsilon_greedy_policy(network):
-#     """
-#     Create a epsilon greedy policy function based on the given network Q-function
-#     :param network: network used to approximate the Q-function
-#     :return: action
-#     """
-#     def policy_fn(observation, epsilon):
-#         A = TENSOR_TYPE["f_tensor"](np.ones(network.action_space)) * epsilon / network.action_space
-#         q_values = network.forward(Variable(observation.cuda(), volatile=True))[0]
-#         best_action = torch.max(q_values, dim=0)[1]
-#         A[best_action] += (1.0 - epsilon)
-#         action = torch.multinomial(A, num_samples=1, replacement=True)
-#         return action.cpu()
-#     return policy_fn
-
 class DDDQN_Network(nn.Module):
     def __init__(self, batch_size, action_space, n_frames_input, kernels_size, out_channels, strides, fc_size):
         """

@@ -4,6 +4,8 @@ import itertools
 import scipy.ndimage
 import scipy.misc
 import matplotlib.pyplot as plt
+import gym
+from gym import spaces
 
 
 class gameOb():
@@ -23,29 +25,47 @@ class gameOb():
         self.reward = reward
         self.name = name
 
-class gameEnv():
-    def __init__(self, partial, env_size, a_size):
+class gameEnv(gym.Env):
+    def __init__(self, partial, env_size, num_actions):
         '''
         Set the games enviroments
         :param partial: if using or not using the padding
         :param env_size: size of the envoriments (matrix x-by-x)
-        :param a_size: action size
+        :param num_actions: action size
         '''
-        self.sizeX = env_size
-        self.sizeY = env_size
-        self.actions_size = a_size
+
+        self.actions_size = num_actions
         assert self.actions_size <= 4
-        self.objects = []
         self.partial = partial
-        self.bg = np.zeros([env_size, env_size])                    # battle-ground used for the game
+
+        self.action_space = spaces.Discrete(num_actions)
+
+
+        if isinstance(env_size, int):
+            self.sizeX = env_size
+            self.sizeY = env_size
+            self.observation_space = self.create_enviroment(env_size, env_size)
+        elif isinstance(env_size, tuple):
+            self.sizeX = env_size[0]
+            self.sizeY = env_size[1]
+            self.observation_space = self.create_enviroment(self.sizeX, self.sizeY)
+        else:
+            raise NotImplementedError("Must env_size be or int or tuple")
+
         a, a_big, measurements, goal, hero = self.reset()
 
 
-    def getFeatures(self):
+    def create_enviroment(self, x_size, y_size):
+        env = np.zeros([x_size, y_size])            # battle-ground used for the game
+        self.is_init = True
+        return env
+
+
+    def get_features(self):
         '''
         :return: get the position of the landing
         '''
-        return np.array([self.objects[0].x,self.objects[0].y]) / float(self.sizeX)
+        return np.array([self.objects[0].x, self.objects[0].y]) / float(self.sizeX)
 
     def reset(self):
         '''
@@ -55,19 +75,21 @@ class gameEnv():
         self.objects = []
         self.orientation = 0
         self.hero = gameOb(self.newPosition(), 1, [1, 1, 1], None, 'hero')     # added the dron
-
-        self.measurements = [0.0, 1.0]                                          # reset the measurements (expression of the goal)
-
         self.objects.append(self.hero)
+
         battery = gameOb([0, 0], 1, [0, 0, 1], 1, 'battery')                    # generate a battery position
         self.battery = battery
         self.objects.append(battery)
+
         for i in range(1):
             bug = gameOb(self.newPosition(), 1, [0, 1, 0], 1, 'goal')          # generate a delivery position
             self.objects.append(bug)
         self.goal = bug
-        state, s_big = self.renderEnv()
-        self.state = state
+
+        self.measurements = [0.0, 1.0]  # reset the measurements (expression of the goal)
+
+        state, s_big = self.get_state()
+
         return state, s_big, self.measurements, [self.goal.x, self.goal.y], [self.hero.x, self.hero.y]
 
     def moveChar(self, action):
@@ -85,7 +107,8 @@ class gameEnv():
         hero = self.objects[0]
         block_positions = [[-1, -1]]  # take in consideration all the blocks along the env
         for ob in self.objects:
-            if ob.name == 'block': block_positions.append([ob.x, ob.y])
+            if ob.name == 'block':
+                block_positions.append([ob.x, ob.y])
         blockPositions = np.array(block_positions)
         hero_x = hero.x
         hero_y = hero.y
@@ -168,7 +191,7 @@ class gameEnv():
         else:
             return 0.0, False
 
-    def renderEnv(self):
+    def get_state(self):
         '''
         reset the enviroments, generating the enviroment and the enviroments image with all the icons.
         padding is used to make sure that the icon fits the enviroments
@@ -207,12 +230,12 @@ class gameEnv():
         if self.measurements[1] <= 0:
             done = True                         # got the delivery
             self.measurements[1] = 0.0
-        state, s_big = self.renderEnv()         # render the enviroments
+        state, s_big = self.get_state()         # render the enviroments
         if reward == None:
             print(done)
             print(reward)
             print(penalty)
-            return state, self.measurements, done
+            return state, self.measurements, done, None
         else:
             goal = None
             for ob in self.objects:

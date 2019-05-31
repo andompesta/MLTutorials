@@ -7,7 +7,7 @@ import numpy as np
 
 import helper
 from os.path import join as path_join
-from gridworld_goals import gameEnv, gameOb
+from RL.envs.gridworld_goals import gameEnv
 from model import DFP_Network
 import imageio
 

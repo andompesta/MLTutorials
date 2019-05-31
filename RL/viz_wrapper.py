@@ -1,6 +1,6 @@
 import numpy as np
 import vizdoom as vz
-from os import path
+from os import path, kill
 import gym
 from gym import error, spaces, utils
 
@@ -40,6 +40,20 @@ class VizdoomEnv(gym.Env):
             try:
                 frame = self.env.get_state().screen_buffer
             except AttributeError:
+                import time
+                import subprocess, signal
+                time.sleep(2)
+
+                p = subprocess.Popen(['ps', 'ax'], stdout=subprocess.PIPE)
+                out, err = p.communicate()
+
+                for line in out.splitlines():
+                    if 'vizdoom' in str(line):
+                        pid = int(line.split(None, 1)[0])
+                        kill(pid, signal.SIGKILL)
+                        print("vizdoom killed")
+
+                time.sleep(2)
                 print("step hard restart")
                 self.env = self.create_enviroment(self.game_path, self.is_visible)
                 reward = 0
@@ -55,6 +69,20 @@ class VizdoomEnv(gym.Env):
         try:
             frame = self.env.get_state().screen_buffer
         except AttributeError:
+            import time
+            import subprocess, signal
+            time.sleep(2)
+
+            p = subprocess.Popen(['ps', 'ax'], stdout=subprocess.PIPE)
+            out, err = p.communicate()
+
+            for line in out.splitlines():
+                if 'vizdoom' in str(line):
+                    pid = int(line.split(None, 1)[0])
+                    kill(pid, signal.SIGKILL)
+                    print("vizdoom killed")
+
+            time.sleep(2)
             print("reset hard restart")
             self.env = self.create_enviroment(self.game_path, self.is_visible)
             frame = self.reset()

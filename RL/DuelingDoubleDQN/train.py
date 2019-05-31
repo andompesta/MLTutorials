@@ -106,7 +106,7 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
     print("start training")
     for i_episode in range(args.num_episodes):
 
-        if i_episode % 200 == 0:
+        if i_episode % 50 == 0:
             # Save the current checkpoint
             helper.save_checkpoint({
                 'episode': i_episode,
@@ -195,15 +195,15 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             # Update priority
             replay_memory.update_priorities(idx, diff.detach().squeeze().cpu().numpy().tolist())
 
-            p_losses.append([loss.item(), td_error.item(), q_value_batch.max().item(), next_q_value_batch.max().item(), epsilon])
+            # p_losses.append([loss.item(), td_error.item(), q_value_batch.max().item(), next_q_value_batch.max().item(), epsilon])
             GLOBAL_STEP += 1
 
-            vis.line(Y=np.array(p_losses),
-                     X=np.repeat(np.expand_dims(np.arange(GLOBAL_STEP), 1), 5, axis=1),
-                     opts=dict(legend=["loss", "td_error", "max_q", "max_n_q", "epsilon"],
-                               title="q_network",
-                               showlegend=True),
-                     win="plane_q_network_{}_{}".format(exp_name, args.version))
+            # vis.line(Y=np.array(p_losses),
+            #          X=np.repeat(np.expand_dims(np.arange(GLOBAL_STEP), 1), 5, axis=1),
+            #          opts=dict(legend=["loss", "td_error", "max_q", "max_n_q", "epsilon"],
+            #                    title="q_network",
+            #                    showlegend=True),
+            #          win="plane_q_network_{}_{}".format(exp_name, args.version))
 
             if (t == args.max_steps) or done:
                 stat = helper.EpisodeStat(t, total_reward)
@@ -221,12 +221,13 @@ def work(env, q_network, t_network, args, vis, exp_name, optimizer, device):
             t_network.load_state_dict(q_network.state_dict())
             print("\nCopied model parameters to target network.")
 
-        p_rewards.append([stat.episode_reward, stat.episode_length, stat.avg_reward])
+        p_rewards = [[stat.episode_reward, stat.episode_length, stat.avg_reward]]
         vis.line(Y=np.array(p_rewards),
-                 X=np.repeat(np.expand_dims(np.arange(i_episode + 1), 1), 3, axis=1),
+                 X=np.repeat(np.expand_dims(np.array([i_episode + 1]), 1), 3, axis=1),
                  opts=dict(legend=["episode_reward", "episode_length", "average_reward"],
                            title="rewards",
                            showlegend=True),
+                 update='append',
                  win="plane_reward_{}_".format(exp_name, args.version))
 
         # vis.save(["main"])
