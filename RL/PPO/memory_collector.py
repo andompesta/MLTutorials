@@ -25,6 +25,7 @@ class MemoryCollector(object):
 
 
     def eval_fn(self, obs):
+        self.model.eval()
         with torch.set_grad_enabled(False):
             obs = torch.tensor(obs).float().to(self.device)
             value_f, action, neg_log_prob, entropy = self.model(obs)
@@ -43,30 +44,35 @@ class MemoryCollector(object):
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
             value_f, action, neg_log_prob = self.eval_fn(obs)
             action = action.cpu().item()
+            neg_log_prob = neg_log_prob.cpu().item()
             value_f = value_f.cpu().item()
 
             mb_obs.append(obs.copy())
             mb_actions.append(action)
             mb_values.append(value_f)
-            mb_neg_log_prob.append(neg_log_prob.cpu().item())
+            mb_neg_log_prob.append(neg_log_prob)
             mb_done.append(done)
 
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
             obs, rewards, done, info = self.env.step(action)
+            obs = np.expand_dims(obs, 0)
             if 'episode' in info.keys():
                 ep_infos.append(info.get('episode'))
             mb_rewards.append(rewards)
 
+
+
         #batch of steps to batch of rollouts
-        mb_obs = np.asarray(mb_obs, dtype=obs.dtype)
+        mb_obs = np.concatenate(mb_obs, 0).astype(np.float32)
         mb_rewards = np.asarray(mb_rewards, dtype=np.float32)
         mb_actions = np.asarray(mb_actions)
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neg_log_prob = np.asarray(mb_neg_log_prob, dtype=np.float32)
         mb_done = np.asarray(mb_done, dtype=np.bool)
 
-        _, last_values, _ = self.eval_fn(obs)
+        last_values, _, _ = self.eval_fn(obs)
+        last_values = last_values.cpu().item()
 
         # discount/bootstrap off value fn
         mb_advs = np.zeros_like(mb_rewards)
@@ -82,8 +88,8 @@ class MemoryCollector(object):
             delta = mb_rewards[t] + self.gamma * next_values * next_non_terminal - mb_values[t]
             mb_advs[t] = lastgaelam = delta + self.gamma * self.lam * next_non_terminal * lastgaelam
 
-        mb_returns = mb_advs + mb_values
-        return (*map(sf01, (mb_obs, mb_returns, mb_done, mb_actions, mb_values, mb_neg_log_prob)), ep_infos)
+        mb_target_v = mb_advs + mb_values
+        return mb_obs, mb_target_v, mb_done, mb_actions, mb_values, mb_neg_log_prob, ep_infos
 
 def sf01(arr):
     """

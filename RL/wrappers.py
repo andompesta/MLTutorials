@@ -40,6 +40,16 @@ class ToTorchObs(Wrapper):
         return  (ob, rew, done, info)
 
 
+class Reset(Wrapper):
+    def __init__(self, env):
+        Wrapper.__init__(self, env=env)
+
+    def step(self, action):
+        ob, rew, done, info = self.env.step(action)
+        if done:
+            ob = self.env.reset()
+        return (ob, rew, done, info)
+
 
 class Monitor(Wrapper):
     EXT = "monitor.csv"

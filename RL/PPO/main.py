@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 from collections import deque
 
 import gym
-from RL.wrappers import Monitor, ToTorchObs
+from RL.wrappers import Monitor, ToTorchObs, Reset
 from os import path
 from RL.PPO.model_ppo import PPO
 from RL.PPO.memory_collector import MemoryCollector
@@ -23,7 +23,7 @@ GLOBAL_STEP = 0
 P_LOSSES = []
 RESET_FRAME = torch.zeros([1, 4, 34, 136])
 HISTOGRAM = {0:0, 1:0, 2:0, 3:0}
-
+VIS = Visdom()
 
 def __pars_args__():
     parser = argparse.ArgumentParser(description='PPO')
@@ -46,7 +46,7 @@ def __pars_args__():
 
 
     parser.add_argument('--seed', type=int, default=1, help='random seed (default: 1)')
-    parser.add_argument('-lr', '--learning_rate', type=float, default=0.01, help='learning rate (default: 0.001)')
+    parser.add_argument('-lr', '--learning_rate', type=float, default=3e-4, help='learning rate (default: 0.001)')
     parser.add_argument('-bs', '--batch_size', type=int, default=512, help='batch size used during learning')
     parser.add_argument('-mini_bs', '--mini_batchs', type=int, default=4, help='number of training minibatches per update. For recurrent policies, should be smaller or equal than number of environments run in parallel.')
     parser.add_argument('-n_step', '--n_step', type=int, default=1024, help='number of steps of the vectorized environment per update')
@@ -57,7 +57,7 @@ def __pars_args__():
     parser.add_argument('-v_path', '--monitor_path', default='./monitor', help='Path to save monitor of agent')
     parser.add_argument('-v', '--version', default='0', help='Path to save monitor of agent')
 
-    parser.add_argument('-save_every', '--save_every', type=int, default=0,
+    parser.add_argument('-save_every', '--save_every', type=int, default=10,
                         help='number of timesteps between saving events')
 
     parser.add_argument('-log_every', '--log_every', type=int, default=10,
@@ -77,6 +77,7 @@ def build_env(args, env_name=EXP_NAME):
     env = gym.make("CartPole-v0")
     # env = ToTorchObs(env)
     env = Monitor(env, helper.ensure_dir(path.join(args.monitor_path, env_name)), allow_early_resets=True)
+    env = Reset(env)
     return env
 
 def test_environment(args, trs_img):
@@ -102,9 +103,12 @@ def test_environment(args, trs_img):
     env.close()
 
 def step_setup(args, train_model, device):
-    optimizer = torch.optim.Adam(train_model.parameters(), lr=args.learning_rate)
+    optimizer = torch.optim.Adam(train_model.parameters(), lr=args.learning_rate, eps=1e-5)
 
-    def train_step_fn(obs, returns, old_actions, old_values, old_neg_log_prbs):
+    def train_step_fn(obs, returns, dones, old_actions, old_values, old_neg_log_prbs):
+
+        assert old_neg_log_prbs.min() > 0
+
         obs = torch.tensor(obs).float().to(device)
         returns = torch.tensor(returns).float().to(device)
         old_values = torch.tensor(old_values).float().to(device)
@@ -116,15 +120,15 @@ def step_setup(args, train_model, device):
             # Normalize the advantages
             advantages = (advantages - advantages.mean()) / (advantages.std() + 1e-8)
 
+        train_model.train()
         with torch.set_grad_enabled(True):
-            train_model.train()
             train_model.zero_grad()
 
             value_f, actions, neg_log_probs, entropy = train_model(obs, action=old_actions)
 
             assert(actions.sum().item() == old_actions.sum().item())
 
-            loss, pg_loss, value_loss, approx_kl, clip_frac = train_model.loss(returns, value_f, neg_log_probs, entropy, advantages,
+            loss, pg_loss, value_loss, entropy_mean, approx_kl, clip_frac = train_model.loss(returns, value_f, neg_log_probs, entropy, advantages,
                                                                                old_values, old_neg_log_prbs,
                                                                                args.clip_range, args.ent_coef, args.vf_coef)
             loss.backward()
@@ -132,16 +136,27 @@ def step_setup(args, train_model, device):
             torch.nn.utils.clip_grad_norm_(train_model.parameters(), args.max_grad_norm)
             optimizer.step()
 
-        return list(map(lambda x: x.detach().item(), [loss, pg_loss, value_loss, approx_kl, clip_frac]))
+        return list(map(lambda x: x.detach().item(), [loss, pg_loss, value_loss, entropy_mean, approx_kl, clip_frac]))
 
     return train_step_fn, optimizer
 
 
+def plot_lines(vals, legend, idx, name):
+    if idx == 1:
+        update=None
+    else:
+        update='append'
 
+    VIS.line(X=[idx-1],
+             Y=[vals],
+             win=EXP_NAME + "_" + name,
+             opts=dict(
+                 legend=legend,
+                 showlegend=True),
+             update=update)
 
 
 if __name__ == '__main__':
-    vis = Visdom()
     args = __pars_args__()
     img_trs = T.Compose([T.ToPILImage(),
                            T.Resize(args.state_size),
@@ -160,6 +175,8 @@ if __name__ == '__main__':
     model = PPO(obs_size, args.hidden_dim, action_space,
                 n_step=args.n_step)
     model.to(device)
+
+    model.reset_parameters()
 
     train_fn, optm = step_setup(args, model, device)
 
@@ -181,7 +198,7 @@ if __name__ == '__main__':
             print('Stepping environment...')
 
         # Get minibatch
-        obs, returns, masks, actions, values, neg_log_prb, ep_infos = memory_collector.run()
+        obs, returns, dones, actions, values, neg_log_prb, ep_infos = memory_collector.run()
 
         if update % args.log_every == 0:
             print('Done.')
@@ -201,28 +218,39 @@ if __name__ == '__main__':
             for start in range(0, n_batch, n_batch_train):
                 end = start + n_batch_train
                 mbinds = inds[start:end]
-                slices = (arr[mbinds] for arr in (obs, returns, masks, actions, values, neg_log_prb))
-                loss, pg_loss, value_loss, approx_kl, clip_frac = train_fn(*slices)
-                mb_loss_vals.append(loss)
+                slices = (arr[mbinds] for arr in (obs, returns, dones, actions, values, neg_log_prb))
+                loss, pg_loss, value_loss, entropy, approx_kl, clip_frac = train_fn(*slices)
+                mb_loss_vals.append([loss, pg_loss, value_loss, entropy, approx_kl, clip_frac])
 
 
         # Feedforward --> get losses --> update
         loss_vals = np.mean(mb_loss_vals, axis=0)
-        loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
+        loss_names = ['loss', 'policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
 
         if update % args.log_every == 0 or update == 1:
             # Calculates if value function is a good predicator of the returns (ev > 1)
             # or if it's just worse than predicting nothing (ev =< 0)
             ev = helper.explained_variance(values, returns)
-            print("misc/serial_timesteps", update * args.n_steps)
+            print("misc/serial_timesteps", update * args.n_step)
             print("misc/n_updates", update)
             print("misc/total_timesteps", update * n_batch)
-
             print("misc/explained_variance", float(ev))
-            print('ep_rew_mean', helper.safemean([ep_info['r'] for ep_info in ep_info_buf]))
-            print('ep_len_mean', helper.safemean([ep_info['l'] for ep_info in ep_info_buf]))
+
+            ep_rew_mean = helper.safemean([ep_info['r'] for ep_info in ep_info_buf])
+            ep_len_mean = helper.safemean([ep_info['l'] for ep_info in ep_info_buf])
+
+            print('ep_rew_mean', ep_rew_mean)
+            print('ep_len_mean', ep_len_mean)
+
             for (loss_val, loss_name) in zip(loss_vals, loss_names):
                 print('loss/' + loss_name, loss_val)
+
+            plot_lines(loss_vals,  loss_names, update, 'losses')
+            plot_lines([ep_rew_mean, ep_len_mean], ['reward', 'length'], update, 'rewards')
+
+
+
+
 
         if update % args.save_every == 0 or update == 1:
             helper.save_checkpoint({

@@ -44,6 +44,7 @@ class PPO(nn.Module):
 
         if action is None:
             action = action_dist.sample()
+            # action = action.clamp(-2, 2)
             neg_log_prob = action_dist.log_prob(action) * -1.
             entropy = action_dist.entropy()
         else:
@@ -51,7 +52,7 @@ class PPO(nn.Module):
             entropy = action_dist.entropy()
 
         value_f = self.value_head(latent_state)
-        value_f = torch.squeeze(value_f)
+        # value_f = torch.squeeze(value_f)
 
         return value_f, action, neg_log_prob, entropy
 
@@ -76,7 +77,7 @@ class PPO(nn.Module):
         value_loss1 = (value_f - reward)**2
         value_loss2 = (value_f_clip - reward)**2
 
-        # TODO: check dimensions of mean and max
+        # value_loss = F.smooth_l1_loss(value_f, reward)
         value_loss = .5 * torch.mean(torch.max(value_loss1, value_loss2))
 
         ratio = torch.exp(old_neg_log_prob - neg_log_prob)
@@ -88,12 +89,16 @@ class PPO(nn.Module):
         approx_kl = 0.5 * torch.mean((neg_log_prob - old_neg_log_prob)**2)
         clip_frac = (torch.abs(ratio - 1.0) > clip_range).float().mean()
 
-        loss = pg_loss - (entropy_mean * ent_coef) - (value_loss * vf_coef)
+        loss = pg_loss - (entropy_mean * ent_coef) + (value_loss * vf_coef)
 
-        return loss, pg_loss, value_loss, approx_kl, clip_frac
+        return loss, pg_loss, value_loss, entropy_mean, approx_kl, clip_frac
 
 
     def reset_parameters(self):
         for p in self.parameters():
-            if len(p.data.shape) > 1:
-                nn.init.xavier_uniform_(p)
+            if len(p.data.shape) == 2:
+                # hidden layer
+                nn.init.orthogonal_(p, gain=2**0.5)
+            elif len(p.data.shape) == 1:
+                # bias
+                nn.init.constant_(p, 0.0)
