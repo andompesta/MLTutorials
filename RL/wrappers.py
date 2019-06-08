@@ -1,5 +1,6 @@
 import gym
 from gym.core import Wrapper
+from gym.wrappers import Monitor as VideoMonitor
 import time
 from glob import glob
 import csv

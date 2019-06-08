@@ -222,6 +222,8 @@ def save_checkpoint(state, path, filename='checkpoint.pth.tar', version=0):
     torch.save(state, ensure_dir(os.path.join(path, version, filename)))
 
 
+
+
 class PrioritizedReplayMemory(object):
     def __init__(self, capacity, alpha=0.6, beta_start=0.4, beta_frames=100000):
         self.prob_alpha = alpha

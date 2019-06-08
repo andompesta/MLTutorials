@@ -1,19 +1,16 @@
 import argparse
-import random                # Handling random number generation
 from datetime import datetime
 import torch
-import torch.nn.functional as F
 from torchvision import transforms as T
 import numpy as np
 from visdom import Visdom
 import RL.helper as helper
-import itertools
 from functools import reduce
 import matplotlib.pyplot as plt
 from collections import deque
 
 import gym
-from RL.wrappers import Monitor, ToTorchObs, Reset
+from RL.wrappers import VideoMonitor, ToTorchObs, Reset
 from os import path
 from RL.PPO.model_ppo import PPO
 from RL.PPO.memory_collector import MemoryCollector
@@ -66,7 +63,7 @@ def __pars_args__():
 
     parser.add_argument("--max_steps", type=int, default=100, help="Max step for an episode")
     parser.add_argument("--state_size", type=list, default=[56, 84], help="Frame size")
-    parser.add_argument("-uc", "--use_cuda", type=bool, default=False, help="Use cuda")
+    parser.add_argument("-uc", "--use_cuda", type=bool, default=True, help="Use cuda")
 
     return parser.parse_args()
 
@@ -76,7 +73,7 @@ def __pars_args__():
 def build_env(args, env_name=EXP_NAME):
     env = gym.make("CartPole-v0")
     # env = ToTorchObs(env)
-    env = Monitor(env, helper.ensure_dir(path.join(args.monitor_path, env_name)), allow_early_resets=True)
+    env = gym.wrappers. Monitor(env, helper.ensure_dir(path.join(args.monitor_path, env_name)), allow_early_resets=True)
     env = Reset(env)
     return env
 
