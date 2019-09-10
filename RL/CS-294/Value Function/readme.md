@@ -12,3 +12,16 @@ As shown in [Fig. 1](#fig-v-function-learning), it is possible to use such arg m
     <br />
     <a name="fig-v-function-learning"> Fig. 1: Value function learning process.</a>
 </p>
+
+
+In real-world scenarios we have to represent the value function <img src="https://latex.codecogs.com/gif.latex?V^{\pi}(s_t)" /> as a neural network because it has to scale to every state.
+
+<p align="center">
+    <img src="./figures/value-function-approx.png" width="400px" height="300px"/>
+    <br />
+</p>
+
+Then we can define a training loss function as: <img src="https://latex.codecogs.com/gif.latex?\mathcal{L}(\theta)&space;=&space;\frac{1}{2}&space;||&space;V_{\theta}(s)&space;-&space;\max_{a_t}&space;Q(s,a)||^2" title="\mathcal{L}(\theta) = \frac{1}{2} || V_{\theta}(s) - \max_{a_t} Q(s,a)||^2" />.
+Finally we can use a fitted value iteration algorithm:
+1. <img src="https://latex.codecogs.com/gif.latex?y_t&space;=&space;max_{a_t}\big&space;(&space;r(s_t,&space;a_t)&space;&plus;&space;\gamma&space;\mathbb{E}[V_{\theta}(s_t')]&space;\big&space;)" title="y_t = max_{a_t}\big ( r(s_t, a_t) + \gamma \mathbb{E}[V_{\theta}(s_t')] \big )" />
+2. <img src="https://latex.codecogs.com/gif.latex?\theta&space;=&space;arg&space;\min_{\theta}&space;\frac{1}{2}\sum_t||V_{\theta}(s_t)&space;-&space;y_t||^2" title="\theta = arg \min_{\theta} \frac{1}{2}\sum_t||V_{\theta}(s_t) - y_t||^2" />
