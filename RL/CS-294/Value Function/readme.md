@@ -30,4 +30,4 @@ Yet such iterative algorithm assume that we have a model ov the environment beca
 It is possible to overcome such limitation using the Q-function formalism:
 1. <img src="https://latex.codecogs.com/gif.latex?y_t&space;=&space;r(s_t,&space;a_t)&space;&plus;&space;\gamma&space;\mathbb{E}[V_{\theta}(s_t')]" />
 2. <img src="https://latex.codecogs.com/gif.latex?\theta&space;=&space;arg&space;\min_{\theta}&space;\frac{1}{2}\sum_t||Q_{\theta}(s_t,a_t)&space;-&space;y_t||^2" />
-where <img src="https://latex.codecogs.com/gif.latex?\mathbb{E}[V_\theta(s_t')]\approx\max_{a_t'}Q_{\theta}(s_t',a_t') />
+where <img src="https://latex.codecogs.com/gif.latex?\mathbb{E}[V_{\theta}(s_t')]\approx\max_{a_t'}Q_{\theta}(s_t',a_t')" title="\mathbb{E}[V_{\theta}(s_t')]\approx\max_{a_t'}Q_{\theta}(s_t',a_t')" />
