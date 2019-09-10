@@ -1,0 +1,4 @@
+# Value Function RL
+In Value-Based RL we use the advante function to define our policy.
+
+According to it's definition, the advantage function <a href="https://www.codecogs.com/eqnedit.php?latex=A^{\pi}(s_t,&space;a_t)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?A^{\pi}(s_t,&space;a_t)" title="A^{\pi}(s_t, a_t)" /></a> tell us how much better <a href="https://www.codecogs.com/eqnedit.php?latex=a_t" target="_blank"><img src="https://latex.codecogs.com/gif.latex?a_t" title="a_t" /></a> is w.r.t. the average action according to policy <a href="https://www.codecogs.com/eqnedit.php?latex=\pi" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\pi"/></a>
