@@ -33,7 +33,6 @@ It is possible to overcome such limitation using the Q-function formalism:
 
 Since in the Q-function the actions are a parameter of the function we don't have to compute different actions:
 1. <img src="https://latex.codecogs.com/gif.latex?y_t&space;=&space;r(s_t,&space;a_t)&space;&plus;&space;\gamma&space;\mathbb{E}[V_{\theta}(s_t')]" />. Note that, <img src="https://latex.codecogs.com/gif.latex?\mathbb{E}[V^\pi_{\phi}(s_t)]&space;\approx&space;\max_{a_t}&space;Q^{\pi}_{\phi}(s_t,&space;a_t)" title="\mathbb{E}[V^\pi_{\phi}(s_t)] \approx \max_{a_t} Q^{\pi}_{\phi}(s_t, a_t)" />, but in this case the actions are an explicit parameter.
-2. <img src="https://latex.codecogs.com/gif.latex?\phi&space;= \phi + &space;arg&space;\min_{\phi}&space;\frac{1}{2}\sum_t||Q_{\phi}(s_t,a_t)&space;-&space;y_t||^2" />
-where <img src="https://latex.codecogs.com/gif.latex?\mathbb{E}[V_{\phi}(s_t')]\approx\max_{a_t'}Q_{\phi}(s_t',a_t')" title="\mathbb{E}[V_{\phi}(s_t')]\approx\max_{a_t'}Q_{\phi}(s_t',a_t')" />
+2. <img src="https://latex.codecogs.com/gif.latex?\phi&space;=\phi+&space;arg&space;\min_{\phi}&space;\frac{1}{2}\sum_t||Q_{\phi}(s_t,a_t)&space;-&space;y_t||^2" /> 
 
 Note that such learning scheme for the **fitted Q-iteration** algorithm overmentioned is off-policy, since the data collection and the learning step are not related to the current policy (given a state and an action the reward obtaiend is indipendent from the policy used). Usually we collect experience randomly and then we optimize our process.
