@@ -1,4 +1,7 @@
 # Value Function RL
+
+Video: https://www.youtube.com/watch?v=chLN1e3ehZE&list=PLkFD6_40KJIxJMR-j5A1mkxK26gh_qg37&index=20&t=2475s
+
 In Value-Based RL we use the advante function to define our policy.
 
 According to it's definition, the advantage function <a href="https://www.codecogs.com/eqnedit.php?latex=A^{\pi}(s_t,&space;a_t)" target="_blank"><img src="https://latex.codecogs.com/gif.latex?A^{\pi}(s_t,&space;a_t)" title="A^{\pi}(s_t, a_t)" /></a> tell us how much better <a href="https://www.codecogs.com/eqnedit.php?latex=a_t" target="_blank"><img src="https://latex.codecogs.com/gif.latex?a_t" title="a_t" /></a> is w.r.t. the average action according to policy <a href="https://www.codecogs.com/eqnedit.php?latex=\pi" target="_blank"><img src="https://latex.codecogs.com/gif.latex?\pi"/></a>.
@@ -36,3 +39,4 @@ Since in the Q-function the actions are a parameter of the function we don't hav
 2. <img src="https://latex.codecogs.com/gif.latex?\phi&space;=\phi+&space;arg&space;\min_{\phi}&space;\frac{1}{2}\sum_t||Q_{\phi}(s_t,a_t)&space;-&space;y_t||^2" /> 
 
 Note that such learning scheme for the **fitted Q-iteration** algorithm overmentioned is off-policy, since the data collection and the learning step are not related to the current policy (given a state and an action the reward obtaiend is indipendent from the policy used). Usually we collect experience randomly and then we optimize our process.
+
